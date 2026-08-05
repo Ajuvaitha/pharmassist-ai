@@ -9,6 +9,10 @@ export default function PrescriptionSummary({
 }) {
   return (
     <div className="summary-panel">
+      <div className="print-only">
+        <div>Date: {new Date().toLocaleDateString()}</div>
+      </div>
+
       <div className="summary-header">
         <label htmlFor="patient-name">Patient name</label>
         <input
@@ -51,6 +55,10 @@ export default function PrescriptionSummary({
           Finalize &amp; Export PDF
         </button>
       )}
+
+      <div className="print-only">
+        <p>Doctor&rsquo;s signature: ______________________</p>
+      </div>
     </div>
   )
 }

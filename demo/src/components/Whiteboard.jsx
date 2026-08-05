@@ -35,7 +35,12 @@ export default function Whiteboard({ onWordSettled }) {
       })
 
       if (cancelled) {
-        editor.destroy()
+        // Editor.load() already destroys any previously loaded instance on this
+        // root element when a new one loads (see iink-ts docs). In React 19
+        // StrictMode, the effect double-mounts in dev, so a second Editor.load()
+        // call may already be replacing this one by the time this promise
+        // resolves. Destroying it here too would tear down the shared root
+        // element's DOM out from under the instance that superseded it.
         return
       }
 

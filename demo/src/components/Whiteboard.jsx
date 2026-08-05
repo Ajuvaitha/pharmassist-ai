@@ -33,6 +33,16 @@ export default function Whiteboard({ onWordSettled }) {
           recognition: {
             type: 'TEXT',
             lang: 'en_US',
+            // JIIX bounding boxes are off by default, so exported words arrive
+            // with only a label. Popups anchor to the word's box on the canvas,
+            // and the exported-word handler skips any word without one, so this
+            // must be enabled or no suggestion ever fires.
+            export: {
+              jiix: {
+                'bounding-box': true,
+                text: { chars: false, words: true },
+              },
+            },
           },
           triggers: {
             exportContent: 'QUIET_PERIOD',

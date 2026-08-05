@@ -11,10 +11,17 @@ export default function DosageFormPopup({ position, medicine, onConfirm, onCance
 
   function handleSubmit(event) {
     event.preventDefault()
+    const parsedDosageQty = Number(dosageQty)
+    const parsedDurationDays = Number(durationDays)
+
+    if (!(parsedDosageQty > 0) || !(parsedDurationDays > 0)) {
+      return
+    }
+
     onConfirm({
       frequency,
-      dosageQty: Number(dosageQty),
-      durationDays: Number(durationDays),
+      dosageQty: parsedDosageQty,
+      durationDays: parsedDurationDays,
       timing,
     })
   }
@@ -41,6 +48,7 @@ export default function DosageFormPopup({ position, medicine, onConfirm, onCance
           id="dosage-qty"
           type="number"
           min="1"
+          required
           value={dosageQty}
           onChange={(e) => setDosageQty(e.target.value)}
         />
@@ -50,6 +58,7 @@ export default function DosageFormPopup({ position, medicine, onConfirm, onCance
           id="dosage-duration"
           type="number"
           min="1"
+          required
           value={durationDays}
           onChange={(e) => setDurationDays(e.target.value)}
         />

@@ -60,4 +60,22 @@ describe('DosageFormPopup', () => {
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onCancel).toHaveBeenCalled()
   })
+
+  it('does not call onConfirm when the dosage quantity field is empty', async () => {
+    const user = userEvent.setup()
+    const onConfirm = vi.fn()
+    render(
+      <DosageFormPopup
+        position={{ x: 0, y: 0 }}
+        medicine={medicine}
+        onConfirm={onConfirm}
+        onCancel={() => {}}
+      />,
+    )
+
+    await user.clear(screen.getByLabelText(/dosage quantity/i))
+    await user.click(screen.getByRole('button', { name: /add to prescription/i }))
+
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
 })

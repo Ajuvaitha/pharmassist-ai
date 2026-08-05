@@ -25,4 +25,4 @@ therefore the medicine suggestion popups) won't fire — a banner in the app exp
 
 - `npm run dev` — start the dev server
 - `npm run build` — production build
-- `npm run test` — run the unit/component test suite
+- `npm test` — run the unit/component test suite

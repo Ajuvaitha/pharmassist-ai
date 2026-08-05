@@ -10,11 +10,18 @@ export default function Whiteboard({ onWordSettled }) {
   const editorRef = useRef(null)
   const previousWordsRef = useRef([])
   const [keysMissing] = useState(!APPLICATION_KEY || !HMAC_KEY)
+  // Editor.load()/destroy() both mutate the same root element's DOM wholesale
+  // (destroy() isn't scoped to a single instance), so two overlapping calls on
+  // that root corrupt each other. React 19 StrictMode double-mounts this
+  // effect in dev, which would otherwise start a second Editor.load() before
+  // the first has resolved. Chaining every setup/teardown off this ref
+  // serializes them so only one is ever in flight on the container.
+  const loadChainRef = useRef(Promise.resolve())
 
   useEffect(() => {
     let cancelled = false
 
-    async function setup() {
+    loadChainRef.current = loadChainRef.current.then(async () => {
       const editor = await Editor.load(containerRef.current, 'INKV2', {
         configuration: {
           server: {
@@ -35,12 +42,7 @@ export default function Whiteboard({ onWordSettled }) {
       })
 
       if (cancelled) {
-        // Editor.load() already destroys any previously loaded instance on this
-        // root element when a new one loads (see iink-ts docs). In React 19
-        // StrictMode, the effect double-mounts in dev, so a second Editor.load()
-        // call may already be replacing this one by the time this promise
-        // resolves. Destroying it here too would tear down the shared root
-        // element's DOM out from under the instance that superseded it.
+        editor.destroy()
         return
       }
 
@@ -63,14 +65,14 @@ export default function Whiteboard({ onWordSettled }) {
       editor.event.addErrorListener((err) => {
         console.warn('iink-ts recognition error (check MyScript keys):', err)
       })
-    }
-
-    setup()
+    })
 
     return () => {
       cancelled = true
-      editorRef.current?.destroy()
-      editorRef.current = null
+      loadChainRef.current = loadChainRef.current.then(() => {
+        editorRef.current?.destroy()
+        editorRef.current = null
+      })
     }
   }, [onWordSettled])
 

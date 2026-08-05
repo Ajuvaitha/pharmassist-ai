@@ -1,0 +1,159 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f4f6f8;
+  color: #1a1a1a;
+}
+
+.app-shell {
+  padding: 24px;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.whiteboard-column {
+  position: relative;
+}
+
+.whiteboard {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.whiteboard-surface {
+  width: 100%;
+  height: 480px;
+}
+
+/* iink-ts injects its own `.ms-editor { height: 100% }` rule onto this same
+   element (it adds that class itself); a scoped selector is needed to win
+   the cascade regardless of stylesheet insertion order. */
+.whiteboard > .whiteboard-surface {
+  height: 480px;
+}
+
+.whiteboard-warning {
+  background: #fff4e5;
+  color: #8a5300;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #f0c987;
+}
+
+.popup {
+  position: absolute;
+  z-index: 10;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  min-width: 220px;
+}
+
+.popup-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.popup-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.popup-list button {
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.popup-list button:hover {
+  background: #f4f6f8;
+}
+
+.popup-meta {
+  color: #667085;
+  font-size: 0.8rem;
+}
+
+.popup form label {
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
+.popup form input,
+.popup form select {
+  width: 100%;
+  padding: 4px 6px;
+}
+
+.popup-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.summary-panel {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.summary-entries {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.summary-entries li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.summary-entry-detail {
+  color: #667085;
+  font-size: 0.8rem;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  .whiteboard-column,
+  .popup {
+    display: none !important;
+  }
+
+  .app-layout {
+    display: block;
+  }
+
+  .summary-panel button {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+}

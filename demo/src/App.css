@@ -36,6 +36,13 @@ body {
   height: 480px;
 }
 
+/* iink-ts injects its own `.ms-editor { height: 100% }` rule onto this same
+   element (it adds that class itself); a scoped selector is needed to win
+   the cascade regardless of stylesheet insertion order. */
+.whiteboard > .whiteboard-surface {
+  height: 480px;
+}
+
 .whiteboard-warning {
   background: #fff4e5;
   color: #8a5300;

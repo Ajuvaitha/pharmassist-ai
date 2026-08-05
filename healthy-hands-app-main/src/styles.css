@@ -1,0 +1,191 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Smart e-Prescription design system.
+ * Soft clinical blues + teal accent, high contrast, generous radii.
+ * All colors are oklch tokens — never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --shadow-card: 0 1px 2px oklch(0.45 0.06 230 / 0.06), 0 8px 24px -12px oklch(0.45 0.08 230 / 0.18);
+  --shadow-lift: 0 12px 40px -14px oklch(0.45 0.1 230 / 0.32);
+}
+
+:root {
+  --radius: 1rem;
+  --background: oklch(0.981 0.008 220);
+  --foreground: oklch(0.24 0.035 240);
+  --surface: oklch(0.962 0.014 215);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.035 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.035 240);
+  --primary: oklch(0.58 0.13 225);
+  --primary-foreground: oklch(0.99 0.005 220);
+  --secondary: oklch(0.94 0.025 210);
+  --secondary-foreground: oklch(0.32 0.06 235);
+  --muted: oklch(0.955 0.012 220);
+  --muted-foreground: oklch(0.52 0.03 235);
+  --accent: oklch(0.72 0.11 185);
+  --accent-foreground: oklch(0.2 0.05 200);
+  --destructive: oklch(0.6 0.19 22);
+  --destructive-foreground: oklch(0.99 0.005 220);
+  --success: oklch(0.68 0.13 160);
+  --success-foreground: oklch(0.19 0.05 165);
+  --warning: oklch(0.82 0.13 78);
+  --warning-foreground: oklch(0.28 0.07 70);
+  --border: oklch(0.9 0.017 220);
+  --input: oklch(0.9 0.017 220);
+  --ring: oklch(0.58 0.13 225);
+  --chart-1: oklch(0.58 0.13 225);
+  --chart-2: oklch(0.72 0.11 185);
+  --chart-3: oklch(0.68 0.13 160);
+  --chart-4: oklch(0.82 0.13 78);
+  --chart-5: oklch(0.6 0.19 22);
+  --sidebar: oklch(0.99 0.006 220);
+  --sidebar-foreground: oklch(0.24 0.035 240);
+  --sidebar-primary: oklch(0.58 0.13 225);
+  --sidebar-primary-foreground: oklch(0.99 0.005 220);
+  --sidebar-accent: oklch(0.955 0.012 220);
+  --sidebar-accent-foreground: oklch(0.32 0.06 235);
+  --sidebar-border: oklch(0.9 0.017 220);
+  --sidebar-ring: oklch(0.58 0.13 225);
+}
+
+.dark {
+  --background: oklch(0.19 0.03 240);
+  --foreground: oklch(0.96 0.01 220);
+  --surface: oklch(0.23 0.035 240);
+  --card: oklch(0.24 0.035 240);
+  --card-foreground: oklch(0.96 0.01 220);
+  --popover: oklch(0.24 0.035 240);
+  --popover-foreground: oklch(0.96 0.01 220);
+  --primary: oklch(0.7 0.12 220);
+  --primary-foreground: oklch(0.17 0.03 240);
+  --secondary: oklch(0.3 0.04 238);
+  --secondary-foreground: oklch(0.96 0.01 220);
+  --muted: oklch(0.28 0.035 240);
+  --muted-foreground: oklch(0.72 0.025 225);
+  --accent: oklch(0.72 0.11 185);
+  --accent-foreground: oklch(0.18 0.04 200);
+  --destructive: oklch(0.66 0.18 22);
+  --destructive-foreground: oklch(0.98 0.005 220);
+  --success: oklch(0.7 0.13 160);
+  --success-foreground: oklch(0.17 0.04 165);
+  --warning: oklch(0.82 0.13 78);
+  --warning-foreground: oklch(0.24 0.06 70);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.7 0.12 220);
+  --chart-1: oklch(0.7 0.12 220);
+  --chart-2: oklch(0.72 0.11 185);
+  --chart-3: oklch(0.7 0.13 160);
+  --chart-4: oklch(0.82 0.13 78);
+  --chart-5: oklch(0.66 0.18 22);
+  --sidebar: oklch(0.22 0.033 240);
+  --sidebar-foreground: oklch(0.96 0.01 220);
+  --sidebar-primary: oklch(0.7 0.12 220);
+  --sidebar-primary-foreground: oklch(0.17 0.03 240);
+  --sidebar-accent: oklch(0.28 0.035 240);
+  --sidebar-accent-foreground: oklch(0.96 0.01 220);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.7 0.12 220);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Soft clinical page wash */
+@utility page-wash {
+  background-image: radial-gradient(
+      120% 80% at 100% 0%,
+      color-mix(in oklab, var(--color-accent) 16%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 70% at 0% 0%,
+      color-mix(in oklab, var(--color-primary) 14%, transparent) 0%,
+      transparent 50%
+    );
+}
+
+@utility card-soft {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+@utility tap-target {
+  min-height: 3rem;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}

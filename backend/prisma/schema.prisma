@@ -192,9 +192,12 @@ model StockMovement {
   actorId      String?
   actor        User?       @relation(fields: [actorId], references: [id])
   indentLineId String?
+  indentLine   IndentLine? @relation(fields: [indentLineId], references: [id])
   createdAt    DateTime    @default(now())
 
   @@index([drugId, createdAt])
+  @@index([actorId])
+  @@index([indentLineId])
 }
 
 model Prescription {
@@ -224,6 +227,7 @@ model Prescription {
 
   @@index([patientId, status])
   @@index([status, startDate])
+  @@index([drugId])
 }
 
 model DailyIndent {
@@ -258,11 +262,13 @@ model IndentLine {
   dispensedBy    User?            @relation(fields: [dispensedById], references: [id])
   dispensedAt    DateTime?
 
-  billingLine BillingLine?
+  billingLine    BillingLine?
+  stockMovements StockMovement[]
 
   // Line-level idempotency for the sweep.
   @@unique([indentId, prescriptionId])
   @@index([patientId, status])
+  @@index([drugId])
 }
 
 model BillingLine {
@@ -288,6 +294,7 @@ model BillingLine {
 
   @@index([patientId, status])
   @@index([wardId, createdAt])
+  @@index([drugId])
 }
 
 model ActivityEvent {

@@ -223,16 +223,28 @@ CREATE UNIQUE INDEX "InventoryItem_drugId_key" ON "InventoryItem"("drugId");
 CREATE INDEX "StockMovement_drugId_createdAt_idx" ON "StockMovement"("drugId", "createdAt");
 
 -- CreateIndex
+CREATE INDEX "StockMovement_actorId_idx" ON "StockMovement"("actorId");
+
+-- CreateIndex
+CREATE INDEX "StockMovement_indentLineId_idx" ON "StockMovement"("indentLineId");
+
+-- CreateIndex
 CREATE INDEX "Prescription_patientId_status_idx" ON "Prescription"("patientId", "status");
 
 -- CreateIndex
 CREATE INDEX "Prescription_status_startDate_idx" ON "Prescription"("status", "startDate");
 
 -- CreateIndex
+CREATE INDEX "Prescription_drugId_idx" ON "Prescription"("drugId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "DailyIndent_wardId_indentDate_key" ON "DailyIndent"("wardId", "indentDate");
 
 -- CreateIndex
 CREATE INDEX "IndentLine_patientId_status_idx" ON "IndentLine"("patientId", "status");
+
+-- CreateIndex
+CREATE INDEX "IndentLine_drugId_idx" ON "IndentLine"("drugId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "IndentLine_indentId_prescriptionId_key" ON "IndentLine"("indentId", "prescriptionId");
@@ -245,6 +257,9 @@ CREATE INDEX "BillingLine_patientId_status_idx" ON "BillingLine"("patientId", "s
 
 -- CreateIndex
 CREATE INDEX "BillingLine_wardId_createdAt_idx" ON "BillingLine"("wardId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "BillingLine_drugId_idx" ON "BillingLine"("drugId");
 
 -- CreateIndex
 CREATE INDEX "ActivityEvent_occurredAt_idx" ON "ActivityEvent"("occurredAt");
@@ -266,6 +281,9 @@ ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_drugId_fkey" FOREIGN K
 
 -- AddForeignKey
 ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_indentLineId_fkey" FOREIGN KEY ("indentLineId") REFERENCES "IndentLine"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_patientId_fkey" FOREIGN KEY ("patientId") REFERENCES "Patient"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

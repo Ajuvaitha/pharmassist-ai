@@ -215,4 +215,35 @@ describe('stopPrescription', () => {
     expect(afterDispensed.status).toBe('dispensed')
     expect(afterPastPending.status).toBe('pending')
   })
+
+  it('closes the indent when the stop order cancels its last pending line', async () => {
+    // Nothing else must close this indent for the assertion to mean
+    // anything: runSweep only ever sets `swept`, and no dispense runs in
+    // this test, so `dispensed` can only come from the stop order itself.
+    const rx = await prisma.prescription.findFirstOrThrow({
+      where: { status: 'active' },
+      include: { patient: true },
+    })
+
+    const today = todayUtc()
+    const indent = await prisma.dailyIndent.create({
+      data: { wardId: rx.patient.wardId, indentDate: today, status: 'swept' },
+    })
+    await prisma.indentLine.create({
+      data: {
+        indentId: indent.id,
+        patientId: rx.patientId,
+        prescriptionId: rx.id,
+        drugId: rx.drugId,
+        qty: 1,
+        treatmentDay: 1,
+        status: 'pending',
+      },
+    })
+
+    await stopPrescription(prisma, await viewerFor('b.kwame'), rx.id, 'Cancels the only pending line')
+
+    const closed = await prisma.dailyIndent.findUniqueOrThrow({ where: { id: indent.id } })
+    expect(closed.status).toBe('dispensed')
+  })
 })

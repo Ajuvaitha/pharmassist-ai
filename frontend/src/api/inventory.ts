@@ -2,14 +2,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { InventoryItem, RestockRequest } from '@pharmassist/shared'
 import { apiGet, apiPost } from './client'
 import { buildQuery } from './query'
+import { activityKeyPrefix } from './activity'
 
 export interface InventoryQuery {
   category?: string
   search?: string
 }
 
-export const inventoryQueryKey = (query: InventoryQuery = {}) => ['inventory', query] as const
-export const categoriesQueryKey = ['inventory', 'categories'] as const
+export const inventoryKeyPrefix = ['inventory'] as const
+export const inventoryQueryKey = (query: InventoryQuery = {}) => [...inventoryKeyPrefix, query] as const
+export const categoriesQueryKey = [...inventoryKeyPrefix, 'categories'] as const
 
 export function useInventory(query: InventoryQuery = {}) {
   return useQuery<InventoryItem[]>({
@@ -32,8 +34,8 @@ export function useRestock() {
     mutationFn: ({ drugId, input }: { drugId: string; input: RestockRequest }) =>
       apiPost<InventoryItem>(`/api/inventory/${drugId}/restock`, input),
     onSuccess: () => {
-      client.invalidateQueries({ queryKey: ['inventory'] })
-      client.invalidateQueries({ queryKey: ['activity'] })
+      client.invalidateQueries({ queryKey: inventoryKeyPrefix })
+      client.invalidateQueries({ queryKey: activityKeyPrefix })
     },
   })
 }

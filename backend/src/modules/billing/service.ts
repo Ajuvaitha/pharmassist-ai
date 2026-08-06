@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client'
+import { Prisma, type PrismaClient } from '@prisma/client'
 import { ErrorCode, type ConfirmBillingRequest, type PatientBillingGroup, type SessionUser } from '@pharmassist/shared'
 import { AppError } from '../../errors'
 import { decimalToNumber, toTransactionDto } from '../../domain/dto'
@@ -19,8 +19,21 @@ export interface BillingQuery {
   date?: Date
 }
 
+// Mirrors PatientBillingGroup but accumulates money as a Decimal — the
+// same algorithm `dispense` uses — rather than a running JS float that can
+// disagree with the sum of the Decimal billing lines it is summarising.
+interface GroupAccumulator {
+  patientId: string
+  patient: string
+  ward: string
+  transactions: PatientBillingGroup['transactions']
+  total: Prisma.Decimal
+  pendingCount: number
+  billed: boolean
+}
+
 function group(lines: LineWithRelations[]): PatientBillingGroup[] {
-  const groups = new Map<string, PatientBillingGroup>()
+  const groups = new Map<string, GroupAccumulator>()
 
   for (const line of lines) {
     let entry = groups.get(line.patientId)
@@ -30,7 +43,7 @@ function group(lines: LineWithRelations[]): PatientBillingGroup[] {
         patient: line.patient.name,
         ward: line.ward.code,
         transactions: [],
-        total: 0,
+        total: new Prisma.Decimal(0),
         pendingCount: 0,
         billed: true,
       }
@@ -38,20 +51,15 @@ function group(lines: LineWithRelations[]): PatientBillingGroup[] {
     }
 
     entry.transactions.push(toTransactionDto(line))
-    entry.total += decimalToNumber(line.total)
+    entry.total = entry.total.add(line.total)
     if (line.status === 'pending') {
       entry.pendingCount += 1
       entry.billed = false
     }
   }
 
-  // Money is summed from Decimal values one at a time, so round once at
-  // the end rather than letting float drift accumulate in the display.
-  for (const entry of groups.values()) {
-    entry.total = Math.round(entry.total * 100) / 100
-  }
-
-  return [...groups.values()]
+  // Converted to a number once, at the very end, rather than per line.
+  return [...groups.values()].map((entry) => ({ ...entry, total: decimalToNumber(entry.total) }))
 }
 
 function scopeFor(viewer: SessionUser, requestedWardId?: string): Prisma.BillingLineWhereInput {

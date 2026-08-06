@@ -9,7 +9,8 @@ export interface ActivityQueryInput {
   limit?: number
 }
 
-export const activityQueryKey = (query: ActivityQueryInput = {}) => ['activity', query] as const
+export const activityKeyPrefix = ['activity'] as const
+export const activityQueryKey = (query: ActivityQueryInput = {}) => [...activityKeyPrefix, query] as const
 
 export function useActivity(query: ActivityQueryInput = {}) {
   return useQuery<ActivityItem[]>({

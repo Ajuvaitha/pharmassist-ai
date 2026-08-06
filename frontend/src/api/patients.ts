@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CreatePatientRequest, Patient } from '@pharmassist/shared'
 import { apiGet, apiPost } from './client'
 import { buildQuery } from './query'
+import { activityKeyPrefix } from './activity'
 import { wardsQueryKey } from './wards'
 
 export interface PatientsQuery {
@@ -9,8 +10,9 @@ export interface PatientsQuery {
   search?: string
 }
 
-export const patientsQueryKey = (query: PatientsQuery = {}) => ['patients', query] as const
-export const patientQueryKey = (id: string) => ['patients', 'detail', id] as const
+export const patientsKeyPrefix = ['patients'] as const
+export const patientsQueryKey = (query: PatientsQuery = {}) => [...patientsKeyPrefix, query] as const
+export const patientQueryKey = (id: string) => [...patientsKeyPrefix, 'detail', id] as const
 
 export function usePatients(query: PatientsQuery = {}) {
   return useQuery<Patient[]>({
@@ -33,9 +35,11 @@ export function useCreatePatient() {
   return useMutation({
     mutationFn: (input: CreatePatientRequest) => apiPost<Patient>('/api/patients', input),
     onSuccess: () => {
-      client.invalidateQueries({ queryKey: ['patients'] })
+      client.invalidateQueries({ queryKey: patientsKeyPrefix })
       // A new admission changes the ward's patient count.
       client.invalidateQueries({ queryKey: wardsQueryKey })
+      // Registering a patient writes an ActivityEvent server-side.
+      client.invalidateQueries({ queryKey: activityKeyPrefix })
     },
   })
 }

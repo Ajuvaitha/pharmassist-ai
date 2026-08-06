@@ -265,6 +265,32 @@ export async function getPickupList(
   }
 }
 
+/**
+ * Flips a `DailyIndent` to `dispensed` once none of its lines are still
+ * `pending`. Called after commit — never from inside the transaction that
+ * fulfils or cancels a line — because two concurrent writers that each
+ * clear the last pending line only see their own snapshot mid-transaction;
+ * counting after commit is what lets the one that lands last see every
+ * commit that came before it.
+ *
+ * Two different writes can be the one that empties an indent: `dispense`
+ * fulfils its lines, and `stopPrescription` cancels them. Only `dispense`
+ * used to call this, so a stop order that cancelled an indent's last
+ * pending line left it stuck at `swept` forever — no dispense was ever
+ * going to run to close it. Both callers now share this one check.
+ *
+ * An indent already `dispensed` is left alone.
+ */
+export async function closeIndentIfComplete(prisma: PrismaClient, indentId: string): Promise<void> {
+  const stillOpen = await prisma.indentLine.count({ where: { indentId, status: 'pending' } })
+  if (stillOpen === 0) {
+    await prisma.dailyIndent.updateMany({
+      where: { id: indentId, status: { not: 'dispensed' } },
+      data: { status: 'dispensed' },
+    })
+  }
+}
+
 export interface DispenseResult {
   patientId: string
   lines: number
@@ -307,6 +333,13 @@ export async function dispense(
         indent: { wardId: input.wardId, indentDate: date },
       },
       include: { drug: { include: { inventoryItem: true } }, patient: { include: { ward: true } }, indent: true },
+      // Two pharmacists dispensing patients who share drugs update
+      // `inventoryItem` rows inside this transaction; without a stable
+      // order, concurrent transactions can acquire those row locks in
+      // opposite orders and deadlock. Ordering by drugId makes every
+      // transaction take the locks in the same order, so Postgres never
+      // has anything to deadlock on.
+      orderBy: { drugId: 'asc' },
     })
 
     if (allLines.length === 0) {
@@ -448,20 +481,8 @@ export async function dispense(
     return { patientId: input.patientId, lines: pending.length, total: decimalToNumber(total) }
   })
 
-  // Moved OUT of the transaction deliberately. Two dispenses for different
-  // patients that each clear the indent's last pending lines both count
-  // pending inside their own snapshot and neither sees the other's
-  // uncommitted rows, so neither would flip the indent — it would stay
-  // `swept` forever, since runSweep never sets `dispensed`. Counting after
-  // commit means the last dispense to land sees every commit that came
-  // before it.
-  const stillOpen = await prisma.indentLine.count({ where: { indentId, status: 'pending' } })
-  if (stillOpen === 0) {
-    await prisma.dailyIndent.updateMany({
-      where: { id: indentId, status: { not: 'dispensed' } },
-      data: { status: 'dispensed' },
-    })
-  }
+  // Moved OUT of the transaction deliberately — see closeIndentIfComplete.
+  await closeIndentIfComplete(prisma, indentId)
 
   return result
 }

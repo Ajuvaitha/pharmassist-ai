@@ -11,6 +11,7 @@ import { toFoodTimingEnum } from '../../domain/enums'
 import { toPrescriptionDto } from '../../domain/dto'
 import { todayUtc } from '../../domain/dates'
 import { assertWardAccess } from '../patients/service'
+import { closeIndentIfComplete } from '../indents/service'
 
 const rxInclude = { drug: true, prescribedBy: true } satisfies Prisma.PrescriptionInclude
 
@@ -70,7 +71,10 @@ export async function updatePrescription(
   id: string,
   input: UpdatePrescriptionRequest,
 ): Promise<Prescription> {
-  const existing = await prisma.prescription.findUnique({ where: { id }, include: { patient: true } })
+  const existing = await prisma.prescription.findUnique({
+    where: { id },
+    include: { patient: { include: { ward: true } } },
+  })
   if (!existing) throw AppError.notFound(`No prescription found with id ${id}`, ErrorCode.RX_NOT_FOUND)
   assertWardAccess(actor, existing.patient.wardId)
 
@@ -83,20 +87,45 @@ export async function updatePrescription(
     if (!drug) throw AppError.invalidInput(`No drug found with id ${input.drugId}`)
   }
 
-  const updated = await prisma.prescription.update({
-    where: { id },
-    data: {
-      ...(input.drugId ? { drugId: input.drugId } : {}),
-      ...(input.dose ? { dose: input.dose } : {}),
-      ...(input.route ? { route: input.route } : {}),
-      ...(input.frequency ? { frequency: input.frequency } : {}),
-      ...(input.foodTiming ? { foodTiming: toFoodTimingEnum(input.foodTiming) } : {}),
-      ...(input.timeOfDay ? { timeOfDay: input.timeOfDay } : {}),
-      ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
-      ...(input.durationDays ? { durationDays: input.durationDays } : {}),
-      ...(input.notes === undefined ? {} : { notes: input.notes || null }),
-    },
-    include: rxInclude,
+  // Only the fields the caller actually sent describe what changed — an
+  // absent field means "leave as is", not "set to nothing".
+  const changedFields = (Object.keys(input) as (keyof UpdatePrescriptionRequest)[]).filter(
+    (key) => input[key] !== undefined,
+  )
+
+  // A dose or frequency change is invisible to tomorrow's sweep and
+  // dispense unless it is audited like its siblings createPrescription and
+  // stopPrescription — both of which already wrap in a transaction and
+  // write an ActivityEvent.
+  const updated = await prisma.$transaction(async (tx) => {
+    const rx = await tx.prescription.update({
+      where: { id },
+      data: {
+        ...(input.drugId ? { drugId: input.drugId } : {}),
+        ...(input.dose ? { dose: input.dose } : {}),
+        ...(input.route ? { route: input.route } : {}),
+        ...(input.frequency ? { frequency: input.frequency } : {}),
+        ...(input.foodTiming ? { foodTiming: toFoodTimingEnum(input.foodTiming) } : {}),
+        ...(input.timeOfDay ? { timeOfDay: input.timeOfDay } : {}),
+        ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
+        ...(input.durationDays ? { durationDays: input.durationDays } : {}),
+        ...(input.notes === undefined ? {} : { notes: input.notes || null }),
+      },
+      include: rxInclude,
+    })
+
+    await tx.activityEvent.create({
+      data: {
+        type: 'prescription',
+        patientId: existing.patientId,
+        wardId: existing.patient.wardId,
+        drugId: rx.drugId,
+        actorId: actor.id,
+        text: `Prescription updated (${changedFields.join(', ')}): ${rx.drug.label} — ${existing.patient.name} (${existing.patient.ward.code})`,
+      },
+    })
+
+    return rx
   })
 
   return toPrescriptionDto(updated)
@@ -126,6 +155,12 @@ export async function stopPrescription(
 
   const today = todayUtc()
 
+  // Captured from inside the transaction so the post-commit completion
+  // check (below) knows which indents to re-count. A stop order can cancel
+  // pending lines spread across several days' indents, unlike dispense
+  // which only ever touches one.
+  let affectedIndentIds: string[] = []
+
   const updated = await prisma.$transaction(async (tx) => {
     const rx = await tx.prescription.update({
       where: { id },
@@ -138,12 +173,20 @@ export async function stopPrescription(
       include: rxInclude,
     })
 
+    const cancellable = {
+      prescriptionId: id,
+      status: 'pending' as const,
+      indent: { indentDate: { gte: today } },
+    }
+
+    const affectedLines = await tx.indentLine.findMany({
+      where: cancellable,
+      select: { indentId: true },
+    })
+    affectedIndentIds = [...new Set(affectedLines.map((line) => line.indentId))]
+
     await tx.indentLine.updateMany({
-      where: {
-        prescriptionId: id,
-        status: 'pending',
-        indent: { indentDate: { gte: today } },
-      },
+      where: cancellable,
       data: { status: 'cancelled' },
     })
 
@@ -160,6 +203,13 @@ export async function stopPrescription(
 
     return rx
   })
+
+  // Moved OUT of the transaction deliberately — see closeIndentIfComplete.
+  // A stop order can be what cancels an indent's last pending line, just
+  // as a dispense can be what fulfils it; either must be able to close it.
+  for (const indentId of affectedIndentIds) {
+    await closeIndentIfComplete(prisma, indentId)
+  }
 
   return toPrescriptionDto(updated)
 }

@@ -2,10 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { SweepResult, WardPickupList } from '@pharmassist/shared'
 import { apiGet, apiPost } from './client'
 import { buildQuery } from './query'
+import { activityKeyPrefix } from './activity'
+import { billingKeyPrefix } from './billing'
+import { inventoryKeyPrefix } from './inventory'
 import { wardsQueryKey } from './wards'
 
+export const pickupListKeyPrefix = ['pickup-list'] as const
 export const pickupListQueryKey = (wardId: string, date?: string) =>
-  ['pickup-list', wardId, date ?? 'today'] as const
+  [...pickupListKeyPrefix, wardId, date ?? 'today'] as const
 
 export function usePickupList(wardId: string | null, date?: string) {
   return useQuery<WardPickupList>({
@@ -19,10 +23,10 @@ export function usePickupList(wardId: string | null, date?: string) {
 function useInvalidateAfterDispense() {
   const client = useQueryClient()
   return () => {
-    client.invalidateQueries({ queryKey: ['pickup-list'] })
-    client.invalidateQueries({ queryKey: ['billing'] })
-    client.invalidateQueries({ queryKey: ['inventory'] })
-    client.invalidateQueries({ queryKey: ['activity'] })
+    client.invalidateQueries({ queryKey: pickupListKeyPrefix })
+    client.invalidateQueries({ queryKey: billingKeyPrefix })
+    client.invalidateQueries({ queryKey: inventoryKeyPrefix })
+    client.invalidateQueries({ queryKey: activityKeyPrefix })
     client.invalidateQueries({ queryKey: wardsQueryKey })
   }
 }

@@ -66,7 +66,11 @@ export function apiGet<T>(path: string): Promise<T> {
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return request<T>(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    // Only declare a JSON content-type when there is actually a JSON body —
+    // Fastify's body parser rejects an empty body sent with this header
+    // (e.g. the bodyless POST /api/auth/logout call).
+    ...(body === undefined
+      ? {}
+      : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   })
 }

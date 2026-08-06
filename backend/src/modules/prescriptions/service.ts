@@ -5,6 +5,7 @@ import type {
   SessionUser,
   UpdatePrescriptionRequest,
 } from '@pharmassist/shared'
+import { ErrorCode } from '@pharmassist/shared'
 import { AppError } from '../../errors'
 import { toFoodTimingEnum } from '../../domain/enums'
 import { toPrescriptionDto } from '../../domain/dto'
@@ -70,11 +71,11 @@ export async function updatePrescription(
   input: UpdatePrescriptionRequest,
 ): Promise<Prescription> {
   const existing = await prisma.prescription.findUnique({ where: { id }, include: { patient: true } })
-  if (!existing) throw AppError.notFound(`No prescription found with id ${id}`, 'RX_NOT_FOUND')
+  if (!existing) throw AppError.notFound(`No prescription found with id ${id}`, ErrorCode.RX_NOT_FOUND)
   assertWardAccess(actor, existing.patient.wardId)
 
   if (existing.status !== 'active') {
-    throw AppError.conflict('RX_NOT_FOUND', 'Only an active prescription can be edited')
+    throw AppError.conflict(ErrorCode.RX_NOT_ACTIVE, 'Only an active prescription can be edited')
   }
 
   if (input.drugId) {
@@ -116,11 +117,11 @@ export async function stopPrescription(
     where: { id },
     include: { patient: { include: { ward: true } }, drug: true },
   })
-  if (!existing) throw AppError.notFound(`No prescription found with id ${id}`, 'RX_NOT_FOUND')
+  if (!existing) throw AppError.notFound(`No prescription found with id ${id}`, ErrorCode.RX_NOT_FOUND)
   assertWardAccess(actor, existing.patient.wardId)
 
   if (existing.status !== 'active') {
-    throw AppError.conflict('RX_NOT_FOUND', `Prescription ${id} is already ${existing.status}`)
+    throw AppError.conflict(ErrorCode.RX_NOT_ACTIVE, `Prescription ${id} is already ${existing.status}`)
   }
 
   const today = todayUtc()

@@ -4,7 +4,10 @@ import { getTestPrisma, resetDatabase } from '../../test/db'
 import { AppError } from '../../errors'
 import { createPrescription, stopPrescription, updatePrescription } from './service'
 import { listDrugs } from '../drugs/service'
+import { todayUtc } from '../../domain/dates'
 import type { SessionUser } from '@pharmassist/shared'
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
 const prisma = getTestPrisma()
 
@@ -103,6 +106,13 @@ describe('updatePrescription', () => {
     await expect(updatePrescription(prisma, await viewerFor('b.kwame'), rx.id, { durationDays: 3 }))
       .rejects.toBeInstanceOf(AppError)
   })
+
+  it('rejects a drugId that is not in the catalog', async () => {
+    const rx = await prisma.prescription.findFirstOrThrow({ where: { status: 'active' } })
+    await expect(
+      updatePrescription(prisma, await viewerFor('b.kwame'), rx.id, { drugId: 'd-ibuprofen-400mg' }),
+    ).rejects.toBeInstanceOf(AppError)
+  })
 })
 
 describe('stopPrescription', () => {
@@ -130,5 +140,79 @@ describe('stopPrescription', () => {
 
     const event = await prisma.activityEvent.findFirstOrThrow({ where: { type: 'stop' } })
     expect(event.text).toContain('Toxicity suspected')
+  })
+
+  it('cancels pending future indent lines but leaves dispensed and past-pending lines untouched', async () => {
+    const rx = await prisma.prescription.findFirstOrThrow({
+      where: { status: 'active' },
+      include: { patient: true },
+    })
+
+    const today = todayUtc()
+    const tomorrow = new Date(today.getTime() + ONE_DAY_MS)
+    const yesterday = new Date(today.getTime() - ONE_DAY_MS)
+
+    const todayIndent = await prisma.dailyIndent.create({
+      data: { wardId: rx.patient.wardId, indentDate: today },
+    })
+    const tomorrowIndent = await prisma.dailyIndent.create({
+      data: { wardId: rx.patient.wardId, indentDate: tomorrow },
+    })
+    const yesterdayIndent = await prisma.dailyIndent.create({
+      data: { wardId: rx.patient.wardId, indentDate: yesterday },
+    })
+
+    // Pending, dated today: must be cancelled by the stop.
+    const pendingTodayLine = await prisma.indentLine.create({
+      data: {
+        indentId: todayIndent.id,
+        patientId: rx.patientId,
+        prescriptionId: rx.id,
+        drugId: rx.drugId,
+        qty: 1,
+        treatmentDay: 1,
+        status: 'pending',
+      },
+    })
+
+    // Dispensed, dated tomorrow (i.e. within the date window a naive filter
+    // would match): must survive because the patient already received it.
+    const dispensedLine = await prisma.indentLine.create({
+      data: {
+        indentId: tomorrowIndent.id,
+        patientId: rx.patientId,
+        prescriptionId: rx.id,
+        drugId: rx.drugId,
+        qty: 1,
+        treatmentDay: 2,
+        status: 'dispensed',
+        dispensedAt: new Date(),
+      },
+    })
+
+    // Pending, dated yesterday: must survive because it is in the past.
+    const pastPendingLine = await prisma.indentLine.create({
+      data: {
+        indentId: yesterdayIndent.id,
+        patientId: rx.patientId,
+        prescriptionId: rx.id,
+        drugId: rx.drugId,
+        qty: 1,
+        treatmentDay: 0,
+        status: 'pending',
+      },
+    })
+
+    await stopPrescription(prisma, await viewerFor('b.kwame'), rx.id, 'Boundary check')
+
+    const [afterPendingToday, afterDispensed, afterPastPending] = await Promise.all([
+      prisma.indentLine.findUniqueOrThrow({ where: { id: pendingTodayLine.id } }),
+      prisma.indentLine.findUniqueOrThrow({ where: { id: dispensedLine.id } }),
+      prisma.indentLine.findUniqueOrThrow({ where: { id: pastPendingLine.id } }),
+    ])
+
+    expect(afterPendingToday.status).toBe('cancelled')
+    expect(afterDispensed.status).toBe('dispensed')
+    expect(afterPastPending.status).toBe('pending')
   })
 })

@@ -97,3 +97,19 @@ export interface Transaction {
   timestamp: string
   status: BillingStatus
 }
+
+export type ActivityType = 'dispense' | 'prescription' | 'stop' | 'restock' | 'register'
+
+export interface ActivityItem {
+  id: string
+  /** HH:MM, already formatted for display. */
+  time: string
+  /** YYYY-MM-DD. */
+  date: string
+  type: ActivityType
+  patient?: string
+  ward?: string
+  drug?: string
+  text: string
+  status?: BillingStatus
+}

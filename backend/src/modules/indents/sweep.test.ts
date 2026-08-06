@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { seed } from '../../../prisma/seed'
+import { AppError } from '../../errors'
 import { getTestPrisma, resetDatabase } from '../../test/db'
 import { runSweep } from './service'
 
@@ -58,6 +59,41 @@ describe('runSweep', () => {
       where: { drug: { label: 'Digoxin 0.25mg' } },
     })
     expect(digoxin).toBeNull()
+  })
+
+  it('excludes a stopped prescription that is still inside its course window', async () => {
+    // Digoxin's elapsed course excludes it regardless of status, so it
+    // cannot prove the status filter does anything. This fixture is
+    // 'stopped' but on DURING_COURSE (2026-08-03) is only treatment day 3
+    // of 10 — still well inside the window — so only the status check can
+    // be excluding it.
+    const patient = await prisma.patient.findFirstOrThrow({ where: { mrn: 'MRN-004821' } })
+    const drug = await prisma.drug.findUniqueOrThrow({ where: { label: 'Tramadol 50mg' } })
+    const prescriber = await prisma.user.findUniqueOrThrow({ where: { username: 'b.kwame' } })
+
+    await prisma.prescription.create({
+      data: {
+        patientId: patient.id,
+        drugId: drug.id,
+        dose: '50mg',
+        route: 'Oral',
+        frequency: 'OD',
+        foodTiming: 'after_food',
+        timeOfDay: ['morning'],
+        startDate: new Date('2026-08-01'),
+        durationDays: 10,
+        status: 'stopped',
+        stopReason: 'No longer indicated',
+        prescribedById: prescriber.id,
+      },
+    })
+
+    await runSweep(prisma, { date: DURING_COURSE })
+
+    const line = await prisma.indentLine.findFirst({
+      where: { drug: { label: 'Tramadol 50mg' }, patientId: patient.id },
+    })
+    expect(line).toBeNull()
   })
 
   it('excludes a prescription whose course has elapsed', async () => {
@@ -170,5 +206,82 @@ describe('runSweep', () => {
 
     const indent = await prisma.dailyIndent.findFirstOrThrow({ where: { ward: { code: 'Ward 4A' } } })
     expect(indent.status).toBe('swept')
+  })
+
+  it('normalises a non-midnight date to the calendar day for the indent', async () => {
+    const noon = new Date('2026-08-03T12:34:56Z')
+
+    const result = await runSweep(prisma, { date: noon })
+
+    expect(result.date).toBe('2026-08-03')
+    const indent = await prisma.dailyIndent.findFirstOrThrow({ where: { ward: { code: 'Ward 4A' } } })
+    expect(indent.indentDate.toISOString()).toBe('2026-08-03T00:00:00.000Z')
+  })
+
+  it('does not create a second indent for the same day when the time differs', async () => {
+    await runSweep(prisma, { date: new Date('2026-08-03T00:00:00Z') })
+    await runSweep(prisma, { date: new Date('2026-08-03T23:59:59Z') })
+
+    expect(await prisma.dailyIndent.count()).toBe(4)
+  })
+
+  it('does not inject lines into an already-dispensed indent', async () => {
+    await runSweep(prisma, { date: DURING_COURSE })
+    const indent = await prisma.dailyIndent.findFirstOrThrow({ where: { ward: { code: 'Ward 4A' } } })
+    await prisma.dailyIndent.update({ where: { id: indent.id }, data: { status: 'dispensed' } })
+
+    // A prescription written after the ward already collected its
+    // medication for the day. If lines are still injected, this proves it.
+    const patient = await prisma.patient.findFirstOrThrow({ where: { mrn: 'MRN-004821' } })
+    const drug = await prisma.drug.findUniqueOrThrow({ where: { label: 'Tramadol 50mg' } })
+    const prescriber = await prisma.user.findUniqueOrThrow({ where: { username: 'b.kwame' } })
+    await prisma.prescription.create({
+      data: {
+        patientId: patient.id,
+        drugId: drug.id,
+        dose: '50mg',
+        route: 'Oral',
+        frequency: 'OD',
+        foodTiming: 'after_food',
+        timeOfDay: ['morning'],
+        startDate: new Date('2026-08-01'),
+        durationDays: 10,
+        prescribedById: prescriber.id,
+      },
+    })
+
+    await runSweep(prisma, { date: DURING_COURSE })
+
+    const newLines = await prisma.indentLine.findMany({
+      where: { indentId: indent.id, drug: { label: 'Tramadol 50mg' } },
+    })
+    expect(newLines).toHaveLength(0)
+    const reread = await prisma.dailyIndent.findUniqueOrThrow({ where: { id: indent.id } })
+    expect(reread.status).toBe('dispensed')
+  })
+
+  it('reports the real id and status of an existing indent in preview mode', async () => {
+    await runSweep(prisma, { date: DURING_COURSE })
+    const indent = await prisma.dailyIndent.findFirstOrThrow({ where: { ward: { code: 'Ward 4A' } } })
+    await prisma.dailyIndent.update({ where: { id: indent.id }, data: { status: 'dispensed' } })
+    const indentCountBefore = await prisma.dailyIndent.count()
+    const lineCountBefore = await prisma.indentLine.count()
+
+    const result = await runSweep(prisma, { date: DURING_COURSE, preview: true })
+
+    const wardResult = result.wards.find((w) => w.wardId === indent.wardId)
+    expect(wardResult?.indentId).toBe(indent.id)
+    expect(wardResult?.status).toBe('dispensed')
+    // Preview must still write nothing.
+    const reread = await prisma.dailyIndent.findUniqueOrThrow({ where: { id: indent.id } })
+    expect(reread.status).toBe('dispensed')
+    expect(await prisma.dailyIndent.count()).toBe(indentCountBefore)
+    expect(await prisma.indentLine.count()).toBe(lineCountBefore)
+  })
+
+  it('rejects an unknown wardId instead of returning an empty success', async () => {
+    await expect(runSweep(prisma, { date: DURING_COURSE, wardId: 'not-a-real-ward-id' })).rejects.toThrow(
+      AppError,
+    )
   })
 })

@@ -6,7 +6,8 @@ import {
   type SweepResult,
   type SweepWardResult,
 } from '@pharmassist/shared'
-import { toDateString, todayUtc, treatmentDayFor } from '../../domain/dates'
+import { startOfUtcDay, toDateString, treatmentDayFor } from '../../domain/dates'
+import { AppError } from '../../errors'
 
 export interface SweepOptions {
   date?: Date
@@ -23,9 +24,17 @@ interface PlannedLine {
 }
 
 /**
- * Decides which prescriptions are due on a date. Pure given its inputs —
- * the scheduled job and the manual endpoint both go through here, so a
- * re-trigger cannot diverge from the 06:00 run.
+ * Decides which of the given prescriptions are due on a date: sweepable
+ * frequency, due today per its schedule, and within its treatment-day
+ * window. Pure given its inputs — the scheduled job and the manual
+ * endpoint both go through here, so a re-trigger cannot diverge from the
+ * 06:00 run.
+ *
+ * This is NOT the complete inclusion rule. `status === 'active'` on the
+ * prescription and `admitted` on the patient are enforced only by the
+ * Prisma `where` in runSweep, before prescriptions ever reach this
+ * function. Callers must pass in already-filtered prescriptions — this
+ * function does not, and cannot, re-check status or admission itself.
  */
 function planLinesFor(
   prescriptions: {
@@ -62,13 +71,21 @@ function planLinesFor(
 }
 
 export async function runSweep(prisma: PrismaClient, opts: SweepOptions = {}): Promise<SweepResult> {
-  const date = opts.date ?? todayUtc()
+  // indentDate is a @db.Date column; a caller-supplied date (e.g. parsed
+  // from a query parameter) must be normalised before it reaches an
+  // upsert where-clause or a create, not left to whatever the driver does
+  // with the time component.
+  const date = startOfUtcDay(opts.date ?? new Date())
   const preview = opts.preview ?? false
 
   const wards = await prisma.ward.findMany({
     where: opts.wardId ? { id: opts.wardId } : {},
     orderBy: { code: 'asc' },
   })
+
+  if (opts.wardId && wards.length === 0) {
+    throw AppError.notFound(`No ward found with id ${opts.wardId}`)
+  }
 
   const results: SweepWardResult[] = []
 
@@ -93,13 +110,19 @@ export async function runSweep(prisma: PrismaClient, opts: SweepOptions = {}): P
     const patientCount = new Set(planned.map((line) => line.patientId)).size
 
     if (preview) {
+      // Read-only: report the real indent if one already exists for this
+      // ward and date, rather than hardcoding pending/null and lying
+      // about an already-dispensed day.
+      const existing = await prisma.dailyIndent.findUnique({
+        where: { wardId_indentDate: { wardId: ward.id, indentDate: date } },
+      })
       results.push({
         wardId: ward.id,
         wardCode: ward.code,
-        indentId: null,
+        indentId: existing?.id ?? null,
         lineCount: planned.length,
         patientCount,
-        status: 'pending',
+        status: existing?.status ?? 'pending',
       })
       continue
     }
@@ -113,19 +136,24 @@ export async function runSweep(prisma: PrismaClient, opts: SweepOptions = {}): P
       create: { wardId: ward.id, indentDate: date, status: 'pending' },
     })
 
-    if (planned.length > 0) {
+    // A prescription written after the ward already collected its
+    // medication for the day must not land in a closed indent.
+    if (planned.length > 0 && indent.status !== 'dispensed') {
       await prisma.indentLine.createMany({
         data: planned.map((line) => ({ ...line, indentId: indent.id })),
         skipDuplicates: true,
       })
     }
 
-    const updated = await prisma.dailyIndent.update({
-      where: { id: indent.id },
-      // An indent that produced lines has been swept. One already marked
-      // dispensed is not walked backwards by a re-run.
-      data: indent.status === 'dispensed' ? {} : { status: 'swept' },
+    // An indent that produced lines has been swept. One already marked
+    // dispensed is not walked backwards by a re-run — checked and set in
+    // one atomic statement so a dispense landing between the upsert above
+    // and this update cannot be overwritten by a stale read.
+    await prisma.dailyIndent.updateMany({
+      where: { id: indent.id, status: { not: 'dispensed' } },
+      data: { status: 'swept' },
     })
+    const updated = await prisma.dailyIndent.findUniqueOrThrow({ where: { id: indent.id } })
 
     results.push({
       wardId: ward.id,

@@ -86,6 +86,25 @@ function Prescribe() {
     setStep(2);
   }
 
+  function handleStepClick(targetStep: StepIndex) {
+    if (targetStep > 0 && !patient) {
+      toast.error("Please select a patient first");
+      setStep(0);
+      return;
+    }
+    if (targetStep === 2 && !draft) {
+      toast.error("Please select a medicine to edit dosage");
+      setStep(1);
+      return;
+    }
+    if (targetStep === 3 && items.length === 0) {
+      toast.error("Please add at least one medicine to review");
+      setStep(1);
+      return;
+    }
+    setStep(targetStep);
+  }
+
   if (finalized && patient) {
     return (
       <div className="space-y-5">
@@ -121,9 +140,9 @@ function Prescribe() {
 
   return (
     <div className="space-y-5">
-      <StepIndicator current={step} onStepClick={(i) => setStep(i)} />
+      <StepIndicator current={step} onStepClick={handleStepClick} />
 
-      {patient && step > 0 && (
+      {patient && step > 0 && step < 3 && (
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
           <div className="min-w-0">
             <PatientCard patient={patient} />

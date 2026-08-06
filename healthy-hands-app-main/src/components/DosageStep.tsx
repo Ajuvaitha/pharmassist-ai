@@ -119,11 +119,19 @@ export function DosageStep({
 
         <Section title="Strength">
           <div className="flex flex-wrap gap-2">
-            {medicine.strengths.map((s) => (
+            {medicine.strengths.filter((s) => s !== "As prescribed").map((s) => (
               <Pillbtn key={s} active={strength === s} onClick={() => setStrength(s)}>
                 {s}
               </Pillbtn>
             ))}
+          </div>
+          <div className="mt-2">
+            <Input
+              value={strength}
+              onChange={(e) => setStrength(e.target.value)}
+              placeholder="e.g. 500 mg, 10 mg/ml"
+              className="h-12 max-w-sm rounded-xl text-base font-semibold"
+            />
           </div>
         </Section>
 

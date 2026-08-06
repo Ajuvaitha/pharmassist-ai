@@ -1,8 +1,11 @@
-import { Printer, MessageCircle, Mail, Smartphone, Save, Stethoscope } from "lucide-react";
+import { useState } from "react";
+import { Printer, MessageCircle, Mail, Smartphone, Save, Stethoscope, Zap, Sparkles, CheckCircle2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useApp, type Prescription } from "@/lib/store";
 import type { Patient } from "@/data/patients";
+import { cn } from "@/lib/utils";
+import { triggerPatientScheduleWorkflow, WORKHOOK_URL, type WorkflowPayload } from "@/lib/workflowAutomation";
 
 export function PrescriptionPreview({
   prescription,
@@ -128,6 +131,14 @@ export function PrescriptionPreview({
         </section>
       </article>
 
+      {/* Workflow Automation Card */}
+      <WorkflowAutomationCard
+        prescription={prescription}
+        patient={patient}
+        clinicName={doctor.clinic}
+        doctorName={doctor.name}
+      />
+
       <div className="no-print grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Button
           onClick={() => window.print()}
@@ -172,6 +183,104 @@ export function PrescriptionPreview({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+function WorkflowAutomationCard({
+  prescription,
+  patient,
+  clinicName,
+  doctorName,
+}: {
+  prescription: Omit<Prescription, "id"> & { id?: string };
+  patient: Patient;
+  clinicName: string;
+  doctorName: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [logMessage, setLogMessage] = useState("");
+
+  async function handleTrigger() {
+    setLoading(true);
+    setStatus("idle");
+    setLogMessage("Sending payload to webhook...");
+
+    const payload: WorkflowPayload = {
+      prescriptionId: prescription.id ?? `RX-${Date.now()}`,
+      patientId: patient.id,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      patientAge: patient.age,
+      patientGender: patient.gender,
+      clinicName,
+      doctorName,
+      createdAt: prescription.createdAt,
+      followUpDate: prescription.followUpDate,
+      items: prescription.items,
+    };
+
+    const res = await triggerPatientScheduleWorkflow(payload);
+    setLoading(false);
+
+    if (res.success) {
+      setStatus("success");
+      setLogMessage(res.message);
+      toast.success("Automated Patient Schedule Workflow Triggered! ⚡");
+    } else {
+      setStatus("error");
+      setLogMessage(res.message);
+      toast.error("Webhook trigger notice: Check connection or CORS endpoint");
+    }
+  }
+
+  return (
+    <div className="no-print card-soft p-5 space-y-4 border-2 border-primary/30 bg-gradient-to-r from-primary/5 via-card to-accent/5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-extrabold flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary animate-pulse" />
+            Automated Patient Schedule Workflow
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Webhook URL: <code className="bg-secondary px-1.5 py-0.5 rounded font-mono text-[11px] text-foreground">{WORKHOOK_URL}</code>
+          </p>
+        </div>
+        <Button
+          onClick={handleTrigger}
+          disabled={loading}
+          className="h-12 rounded-xl text-sm font-bold gap-2 bg-primary"
+        >
+          {loading ? (
+            <>
+              <Sparkles className="h-4 w-4 animate-spin" /> Triggering Workflow...
+            </>
+          ) : (
+            <>
+              <Zap className="h-4 w-4" /> Trigger Automation Schedule
+            </>
+          )}
+        </Button>
+      </div>
+
+      {status !== "idle" && (
+        <div
+          className={cn(
+            "rounded-xl p-3.5 text-xs font-semibold flex items-center gap-2 transition-all",
+            status === "success"
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : "bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300"
+          )}
+        >
+          {status === "success" ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          ) : (
+            <ExternalLink className="h-4 w-4 shrink-0 text-amber-600" />
+          )}
+          <span className="flex-1 truncate">{logMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

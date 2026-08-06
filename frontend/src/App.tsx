@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import type { Page, Patient, Prescription } from './types';
-import { INITIAL_PATIENTS } from './data';
+import type { Page } from './types';
 import { useLogout, useMe } from './api/auth';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -22,45 +21,14 @@ export default function App() {
   const [page, setPage] = useState<Page | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
-  // Phase 3 replaces this with server data.
-  const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS);
-
   const navigate = (p: Page) => {
     setPage(p);
     if (p !== 'patient-detail') setSelectedPatientId(null);
   };
 
-  const openPatient = (patient: Patient) => {
-    setSelectedPatientId(patient.id);
+  const openPatient = (patientId: string) => {
+    setSelectedPatientId(patientId);
     setPage('patient-detail');
-  };
-
-  const registerPatient = (patient: Patient) => {
-    setPatients(prev => [...prev, patient]);
-  };
-
-  const addPrescription = (patientId: string, rx: Omit<Prescription, 'id' | 'currentDay' | 'status'>) => {
-    setPatients(prev => prev.map(p =>
-      p.id === patientId
-        ? { ...p, prescriptions: [...p.prescriptions, { ...rx, id: `rx-${Date.now()}`, currentDay: 1, status: 'active' as const }] }
-        : p
-    ));
-  };
-
-  const editPrescription = (patientId: string, rxId: string, rx: Omit<Prescription, 'id' | 'currentDay' | 'status'>) => {
-    setPatients(prev => prev.map(p =>
-      p.id === patientId
-        ? { ...p, prescriptions: p.prescriptions.map(r => r.id === rxId ? { ...r, ...rx } : r) }
-        : p
-    ));
-  };
-
-  const stopPrescription = (patientId: string, rxId: string, reason: string) => {
-    setPatients(prev => prev.map(p =>
-      p.id === patientId
-        ? { ...p, prescriptions: p.prescriptions.map(r => r.id === rxId ? { ...r, status: 'stopped' as const, stopReason: reason } : r) }
-        : p
-    ));
   };
 
   if (isLoading) {
@@ -82,41 +50,33 @@ export default function App() {
   const ward = me.ward?.label ?? '';
   // Doctors land on their own patient list; everyone else on the dashboard.
   const activePage: Page = page ?? (role === 'doctor' ? 'doctor-patients' : 'dashboard');
-  const selectedPatient = selectedPatientId ? patients.find(p => p.id === selectedPatientId) : null;
 
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard':
-        return <DashboardPage role={role} ward={ward} patients={patients} />;
+        return <DashboardPage role={role} ward={ward} />;
       case 'ward-sweep':
-        return <WardSweepPage patients={patients} />;
+        return <WardSweepPage />;
       case 'patients':
-        return <PatientsPage patients={patients} onSelectPatient={openPatient} />;
+        return <PatientsPage onSelectPatient={openPatient} />;
       case 'patient-detail':
-        return selectedPatient
-          ? <PatientDetailPage patient={selectedPatient} onBack={() => navigate('patients')} onStopPrescription={stopPrescription} />
+        return selectedPatientId
+          ? <PatientDetailPage patientId={selectedPatientId} onBack={() => navigate('patients')} />
           : null;
       case 'inventory':
         return <InventoryPage />;
       case 'billing':
         return <BillingPage />;
       case 'register-patient':
-        return <RegisterPatientPage onRegister={registerPatient} />;
+        return <RegisterPatientPage />;
       case 'doctor-patients':
-        return (
-          <DoctorPatientsPage
-            patients={patients}
-            doctorName={user}
-            onAddPrescription={addPrescription}
-            onEditPrescription={editPrescription}
-          />
-        );
+        return <DoctorPatientsPage doctorName={user} />;
       case 'doctor':
         return <DoctorPage />;
       case 'recent-activity':
         return <RecentActivityPage />;
       default:
-        return <DashboardPage role={role} ward={ward} patients={patients} />;
+        return <DashboardPage role={role} ward={ward} />;
     }
   };
 

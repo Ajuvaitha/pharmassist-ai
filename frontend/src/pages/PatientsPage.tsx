@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import type { Patient } from '../types';
+import { usePatients } from '../api/patients';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import StatusPill from '../components/StatusPill';
 
 interface PatientsPageProps {
-  patients: Patient[];
-  onSelectPatient: (patient: Patient) => void;
+  onSelectPatient: (patientId: string) => void;
 }
 
-export default function PatientsPage({ patients, onSelectPatient }: PatientsPageProps) {
+export default function PatientsPage({ onSelectPatient }: PatientsPageProps) {
   const [search, setSearch] = useState('');
+  const { data: patients, isLoading, error } = usePatients();
 
-  const filtered = patients.filter(p =>
+  const filtered = (patients ?? []).filter(p =>
     !search ||
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.mrn.toLowerCase().includes(search.toLowerCase()) ||
@@ -58,7 +59,10 @@ export default function PatientsPage({ patients, onSelectPatient }: PatientsPage
           ))}
         </div>
 
-        {filtered.length === 0 && (
+        {isLoading && <LoadingPanel label="Loading patients…" />}
+        {error && <ErrorPanel error={error} />}
+
+        {!isLoading && !error && filtered.length === 0 && (
           <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: '#64748B' }}>
             No patients match your search.
           </div>
@@ -120,7 +124,7 @@ export default function PatientsPage({ patients, onSelectPatient }: PatientsPage
 
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
-                  onClick={() => onSelectPatient(p)}
+                  onClick={() => onSelectPatient(p.id)}
                   style={{
                     padding: '5px 12px',
                     border: '1px solid #0AADA8',

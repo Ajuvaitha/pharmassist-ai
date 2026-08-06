@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import type { Patient, Prescription } from '../types';
+import type { Prescription } from '../types';
+import { usePatient } from '../api/patients';
+import { useStopPrescription } from '../api/prescriptions';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import StatusPill from '../components/StatusPill';
 
 interface PatientDetailPageProps {
-  patient: Patient;
+  patientId: string;
   onBack: () => void;
-  onStopPrescription: (patientId: string, rxId: string, reason: string) => void;
 }
 
 const STOP_REASONS = [
@@ -24,10 +26,16 @@ const FOOD_LABEL: Record<string, string> = {
   'not-applicable': '—',
 };
 
-export default function PatientDetailPage({ patient, onBack, onStopPrescription }: PatientDetailPageProps) {
+export default function PatientDetailPage({ patientId, onBack }: PatientDetailPageProps) {
+  const { data: patient, isLoading, error } = usePatient(patientId);
+  const stop = useStopPrescription();
   const [stoppingRx, setStoppingRx] = useState<Prescription | null>(null);
   const [stopReason, setStopReason] = useState(STOP_REASONS[0]);
   const [stopNotes, setStopNotes] = useState('');
+
+  if (isLoading) return <LoadingPanel label="Loading patient…" />;
+  if (error) return <ErrorPanel error={error} />;
+  if (!patient) return null;
 
   const activePrescriptions = patient.prescriptions.filter(rx => rx.status === 'active');
   const pastPrescriptions = patient.prescriptions.filter(rx => rx.status !== 'active');
@@ -35,9 +43,10 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
 
   const handleStop = () => {
     if (!stoppingRx) return;
-    onStopPrescription(patient.id, stoppingRx.id, `${stopReason}${stopNotes ? ' — ' + stopNotes : ''}`);
-    setStoppingRx(null);
-    setStopNotes('');
+    stop.mutate(
+      { id: stoppingRx.id, reason: `${stopReason}${stopNotes ? ' — ' + stopNotes : ''}` },
+      { onSuccess: () => { setStoppingRx(null); setStopNotes(''); } },
+    );
   };
 
   return (

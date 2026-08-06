@@ -202,11 +202,16 @@ export async function getPickupList(
 ): Promise<WardPickupList> {
   assertWardAccess(viewer, wardId)
 
+  // indentDate is a @db.Date column; a caller-supplied Date with a time
+  // component must be normalised before it reaches the lookup, or it
+  // silently misses the row and reports an empty list instead of a 404.
+  const day = startOfUtcDay(date)
+
   const ward = await prisma.ward.findUnique({ where: { id: wardId } })
   if (!ward) throw AppError.notFound(`No ward found with id ${wardId}`)
 
   const indent = await prisma.dailyIndent.findUnique({
-    where: { wardId_indentDate: { wardId, indentDate: date } },
+    where: { wardId_indentDate: { wardId, indentDate: day } },
     include: {
       lines: {
         where: { status: { not: 'cancelled' } },
@@ -217,7 +222,7 @@ export async function getPickupList(
   })
 
   if (!indent) {
-    return { wardId, wardCode: ward.code, date: toDateString(date), status: 'pending', patients: [] }
+    return { wardId, wardCode: ward.code, date: toDateString(day), status: 'pending', patients: [] }
   }
 
   const byPatient = new Map<string, WardPickupList['patients'][number]>()
@@ -254,7 +259,7 @@ export async function getPickupList(
   return {
     wardId,
     wardCode: ward.code,
-    date: toDateString(date),
+    date: toDateString(day),
     status: indent.status,
     patients: [...byPatient.values()],
   }
@@ -284,21 +289,36 @@ export async function dispense(
   // string and a Date, which nothing can satisfy.
   input: Omit<DispenseRequest, 'date'> & { date?: Date },
 ): Promise<DispenseResult> {
-  const date = input.date ?? todayUtc()
+  // indentDate is a @db.Date column; a caller-supplied Date with a time
+  // component must be normalised before it reaches the lookup, or it
+  // silently misses the row and reports a 404 for a batch that exists.
+  const date = startOfUtcDay(input.date ?? new Date())
   assertWardAccess(actor, input.wardId)
 
-  return prisma.$transaction(async (tx) => {
-    const lines = await tx.indentLine.findMany({
+  // Captured from inside the transaction so the post-commit completion
+  // check (below) knows which indent to re-count. Mutated, not returned:
+  // DispenseResult does not expose it.
+  let indentId = ''
+
+  const result = await prisma.$transaction(async (tx) => {
+    const allLines = await tx.indentLine.findMany({
       where: {
         patientId: input.patientId,
         indent: { wardId: input.wardId, indentDate: date },
-        status: { not: 'cancelled' },
       },
       include: { drug: { include: { inventoryItem: true } }, patient: { include: { ward: true } }, indent: true },
     })
 
-    if (lines.length === 0) {
+    if (allLines.length === 0) {
       throw AppError.notFound('No pending medication for that patient on that date')
+    }
+
+    const lines = allLines.filter((line) => line.status !== 'cancelled')
+    if (lines.length === 0) {
+      // Distinguish "every line was cancelled by a stop order" from "never
+      // on the list" — the former is not the same failure as the latter,
+      // and reporting it as such hides a stop order from the pharmacist.
+      throw AppError.notFound('All medication for that patient on that date was cancelled by a stop order')
     }
 
     const pending = lines.filter((line) => line.status === 'pending')
@@ -309,21 +329,55 @@ export async function dispense(
       )
     }
 
-    // Check every line before writing any of them.
+    // Aggregate the required quantity PER DRUG before checking. Prescription
+    // is only unique on (patientId, drugId, startDate), so one patient can
+    // hold two active prescriptions for the same drug with different start
+    // dates, both due the same day — that puts two lines for the same drug
+    // in one batch. Checking each line against a stock figure read once
+    // before the loop lets both lines pass the same check and both
+    // decrement, which can drive stock negative with nothing to stop it.
+    interface DrugRequirement {
+      label: string
+      qty: number
+      inventoryItem: (typeof pending)[number]['drug']['inventoryItem']
+    }
+
+    const requiredByDrug = new Map<string, DrugRequirement>()
     for (const line of pending) {
-      const stock = line.drug.inventoryItem
-      if (!stock) {
-        throw AppError.conflict(ErrorCode.INSUFFICIENT_STOCK, `${line.drug.label} has no inventory record`)
+      const existing = requiredByDrug.get(line.drugId)
+      if (existing) {
+        existing.qty += line.qty
+      } else {
+        requiredByDrug.set(line.drugId, {
+          label: line.drug.label,
+          qty: line.qty,
+          inventoryItem: line.drug.inventoryItem,
+        })
       }
-      if (stock.currentStock < line.qty) {
+    }
+
+    // Check every drug's total requirement before writing any of them.
+    for (const requirement of requiredByDrug.values()) {
+      const stock = requirement.inventoryItem
+      if (!stock) {
+        throw AppError.conflict(ErrorCode.INSUFFICIENT_STOCK, `${requirement.label} has no inventory record`)
+      }
+      if (stock.currentStock < requirement.qty) {
         throw AppError.conflict(
           ErrorCode.INSUFFICIENT_STOCK,
-          `${line.drug.label}: ${stock.currentStock} in stock, ${line.qty} required`,
+          `${requirement.label}: ${stock.currentStock} in stock, ${requirement.qty} required`,
         )
       }
     }
 
-    let total = 0
+    // Accumulated as a Decimal, not a JS number — a running float sum can
+    // disagree with the sum of the persisted Decimal billing lines it is
+    // supposed to summarise.
+    let total = new Prisma.Decimal(0)
+
+    // One batch, one timestamp — set once above the loop rather than once
+    // per line.
+    const dispensedAt = new Date()
 
     for (const line of pending) {
       await tx.inventoryItem.update({
@@ -341,14 +395,25 @@ export async function dispense(
         },
       })
 
-      await tx.indentLine.update({
-        where: { id: line.id },
-        data: { status: 'dispensed', dispensedById: actor.id, dispensedAt: new Date() },
+      // Conditional on still-pending rather than a blind update by id.
+      // Postgres's READ COMMITTED lets two concurrent dispenses for the
+      // same patient both pass the checks above; the loser must land here
+      // as a labelled conflict instead of an unhandled unique-constraint
+      // violation on the billing line insert below.
+      const updated = await tx.indentLine.updateMany({
+        where: { id: line.id, status: 'pending' },
+        data: { status: 'dispensed', dispensedById: actor.id, dispensedAt },
       })
+      if (updated.count === 0) {
+        throw AppError.conflict(
+          ErrorCode.BATCH_ALREADY_FULFILLED,
+          `Medication for ${line.patient.name} was already dispensed on ${toDateString(date)}`,
+        )
+      }
 
       const unitPrice = line.drug.unitPrice
       const lineTotal = unitPrice.mul(line.qty)
-      total += decimalToNumber(lineTotal)
+      total = total.add(lineTotal)
 
       await tx.billingLine.create({
         data: {
@@ -378,17 +443,25 @@ export async function dispense(
       },
     })
 
-    const stillOpen = await tx.indentLine.count({
-      where: { indentId: pending[0].indentId, status: 'pending' },
-    })
+    indentId = pending[0].indentId
 
-    if (stillOpen === 0) {
-      await tx.dailyIndent.update({
-        where: { id: pending[0].indentId },
-        data: { status: 'dispensed' },
-      })
-    }
-
-    return { patientId: input.patientId, lines: pending.length, total }
+    return { patientId: input.patientId, lines: pending.length, total: decimalToNumber(total) }
   })
+
+  // Moved OUT of the transaction deliberately. Two dispenses for different
+  // patients that each clear the indent's last pending lines both count
+  // pending inside their own snapshot and neither sees the other's
+  // uncommitted rows, so neither would flip the indent — it would stay
+  // `swept` forever, since runSweep never sets `dispensed`. Counting after
+  // commit means the last dispense to land sees every commit that came
+  // before it.
+  const stillOpen = await prisma.indentLine.count({ where: { indentId, status: 'pending' } })
+  if (stillOpen === 0) {
+    await prisma.dailyIndent.updateMany({
+      where: { id: indentId, status: { not: 'dispensed' } },
+      data: { status: 'dispensed' },
+    })
+  }
+
+  return result
 }

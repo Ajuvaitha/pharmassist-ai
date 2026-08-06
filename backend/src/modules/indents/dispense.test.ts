@@ -144,6 +144,74 @@ describe('dispense', () => {
     expect(await prisma.indentLine.count({ where: { patientId: patient.id, status: 'dispensed' } })).toBe(0)
   })
 
+  it('rejects a same-drug batch that would drive stock negative, and commits nothing', async () => {
+    const patient = await margaret()
+    const wardId = (await ward4a()).id
+    const drug = await prisma.drug.findUniqueOrThrow({ where: { label: 'Amoxicillin 500mg' } })
+    const prescriber = await prisma.user.findUniqueOrThrow({ where: { username: 'b.kwame' } })
+
+    // A second active prescription for the SAME drug, on a different
+    // startDate — allowed by the (patientId, drugId, startDate) unique
+    // constraint — that is also due today. Re-running the sweep folds a
+    // second indent line for it into today's already-swept indent,
+    // alongside the existing Amoxicillin line from the seed.
+    await prisma.prescription.create({
+      data: {
+        patientId: patient.id,
+        drugId: drug.id,
+        dose: '500mg',
+        route: 'Oral',
+        frequency: 'TDS',
+        foodTiming: 'after_food',
+        timeOfDay: ['morning', 'afternoon', 'night'],
+        startDate: new Date('2026-08-01T00:00:00Z'),
+        durationDays: 7,
+        status: 'active',
+        prescribedById: prescriber.id,
+        prescribedAt: new Date('2026-08-01T08:00:00Z'),
+      },
+    })
+    await runSweep(prisma, { date: DATE })
+
+    const lines = await prisma.indentLine.findMany({
+      where: { patientId: patient.id, drugId: drug.id, status: 'pending' },
+    })
+    expect(lines).toHaveLength(2) // one line per prescription, same drug
+    const requiredTotal = lines.reduce((sum, line) => sum + line.qty, 0)
+    expect(requiredTotal).toBeGreaterThan(0)
+
+    // Stock enough for one line but not both.
+    const oneLineQty = lines[0].qty
+    await prisma.inventoryItem.update({
+      where: { drugId: drug.id },
+      data: { currentStock: oneLineQty },
+    })
+
+    const otherDrug = await prisma.drug.findUniqueOrThrow({ where: { label: 'Metformin 500mg' } })
+    const otherBefore = await prisma.inventoryItem.findUniqueOrThrow({ where: { drugId: otherDrug.id } })
+
+    const error = await dispense(prisma, await viewerFor('k.asante'), {
+      patientId: patient.id, wardId, date: DATE,
+    }).catch((e) => e)
+
+    expect(error).toBeInstanceOf(AppError)
+    expect(error.code).toBe('INSUFFICIENT_STOCK')
+
+    // Nothing committed: the Amoxicillin stock is untouched (never went
+    // negative), the unrelated Metformin line is untouched, no billing
+    // lines exist, and no line was marked dispensed.
+    const amoxAfter = await prisma.inventoryItem.findUniqueOrThrow({ where: { drugId: drug.id } })
+    expect(amoxAfter.currentStock).toBe(oneLineQty)
+
+    const otherAfter = await prisma.inventoryItem.findUniqueOrThrow({ where: { drugId: otherDrug.id } })
+    expect(otherAfter.currentStock).toBe(otherBefore.currentStock)
+
+    expect(await prisma.billingLine.count()).toBe(0)
+    expect(
+      await prisma.indentLine.count({ where: { patientId: patient.id, status: 'dispensed' } }),
+    ).toBe(0)
+  })
+
   it('rejects a patient with no pending lines for the day', async () => {
     const patient = await margaret()
     await expect(dispense(prisma, await viewerFor('k.asante'), {

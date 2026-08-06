@@ -564,7 +564,16 @@ Expected: Errors only where pages reference fields the shared types renamed — 
 - `frontend/src/pages/DashboardPage.tsx` and `frontend/src/pages/WardSweepPage.tsx` currently call `w.name.split(' — ')[0]`. Replace each with `w.code`.
 - `frontend/src/components/SweepBar.tsx` — if it renders `ward.name`, change to `ward.label`.
 
-Re-run until clean. `frontend/src/data.ts` will report errors for the new required fields (`Ward.code`, `Ward.label`, `Patient.wardId`, `Patient.status`, `Prescription.drugId`, `InventoryItem.drugId`); leave `data.ts` alone for now and instead add `// @ts-nocheck` as its first line — the file is deleted in Phase 3.
+Re-run until clean.
+
+`frontend/src/data.ts` will also report errors, because the shared types require fields the mock records lack. Fix the records properly — do **not** add `// @ts-nocheck`. Specifically:
+
+- Each `WARDS` entry needs `code` and `label`. Split the existing `name`: `{ id: 'w1', code: 'Ward 4A', name: 'General Medicine', label: 'Ward 4A — General Medicine', sweepStatus: 'dispensed', activePatients: 18 }`, and the same shape for `w2` Cardiology, `w3` Orthopaedics, `w4` Oncology.
+- Each `INITIAL_PATIENTS` entry needs `wardId` (the matching ward's `id`, e.g. `'w1'` for Ward 4A) and `status: 'admitted'`. Its existing `ward` field already holds the code (`'Ward 4A'`), which is now correct.
+- Each prescription needs `drugId`. Use a stable slug of the drug label: `'Amoxicillin 500mg'` → `drugId: 'd-amoxicillin-500mg'`, and so on for every prescription.
+- Each `INVENTORY` entry needs `drugId` using the same slug scheme, so a mock prescription and a mock inventory row for the same drug share an id.
+
+These are mock values that Phase 3 deletes, but they must typecheck cleanly in the meantime.
 
 - [ ] **Step 10: Verify the build**
 

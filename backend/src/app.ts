@@ -7,6 +7,7 @@ import prismaPlugin from './plugins/prisma'
 import authRoutes from './modules/auth/routes'
 import healthRoutes from './modules/health/routes'
 import wardRoutes from './modules/wards/routes'
+import patientRoutes from './modules/patients/routes'
 
 export interface BuildAppOptions {
   /** Supplied by tests to pin the app to the test database. */
@@ -27,6 +28,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(healthRoutes)
   await app.register(authRoutes)
   await app.register(wardRoutes)
+  await app.register(patientRoutes)
 
   return app
 }

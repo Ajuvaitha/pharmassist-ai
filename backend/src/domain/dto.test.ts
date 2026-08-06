@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { Prisma } from '@prisma/client'
-import { decimalToNumber, stockStatusFor, toInventoryDto, toPrescriptionDto } from './dto'
+import { decimalToNumber, stockStatusFor, toInventoryDto, toPrescriptionDto, toTransactionDto } from './dto'
 
 describe('decimalToNumber', () => {
   it('converts a Prisma Decimal to an exact number', () => {
@@ -113,5 +113,54 @@ describe('toPrescriptionDto', () => {
     const dto = toPrescriptionDto(base, new Date('2026-08-06T00:00:00Z'))
     expect(dto.notes).toBeUndefined()
     expect(dto.stopReason).toBeUndefined()
+  })
+})
+
+describe('toTransactionDto', () => {
+  const line = {
+    id: 'txn1',
+    qty: 3,
+    unitPrice: new Prisma.Decimal('0.85'),
+    total: new Prisma.Decimal('2.55'),
+    status: 'billed' as const,
+    createdAt: new Date('2026-08-01T09:30:00Z'),
+    patient: { name: 'Ama Boateng' },
+    ward: { code: 'Ward 4A' },
+    drug: { label: 'Amoxicillin 500mg' },
+    indentLine: { indent: { id: 'indent-1', indentDate: new Date('2026-08-01T00:00:00Z') } },
+  }
+
+  it('converts unitPrice and total to actual numbers, not Decimal or string', () => {
+    const dto = toTransactionDto(line)
+    expect(typeof dto.unitPrice).toBe('number')
+    expect(typeof dto.total).toBe('number')
+  })
+
+  it('carries the exact converted money values', () => {
+    const dto = toTransactionDto(line)
+    expect(dto.unitPrice).toBe(0.85)
+    expect(dto.total).toBe(2.55)
+  })
+
+  it('flattens patient name, ward code, and drug label', () => {
+    const dto = toTransactionDto(line)
+    expect(dto.patient).toBe('Ama Boateng')
+    expect(dto.ward).toBe('Ward 4A')
+    expect(dto.drug).toBe('Amoxicillin 500mg')
+  })
+
+  it('uses the parent indent id as batchId', () => {
+    const dto = toTransactionDto(line)
+    expect(dto.batchId).toBe('indent-1')
+  })
+
+  it('formats timestamp as the ISO string of createdAt', () => {
+    const dto = toTransactionDto(line)
+    expect(dto.timestamp).toBe('2026-08-01T09:30:00.000Z')
+  })
+
+  it('passes status through unchanged', () => {
+    const dto = toTransactionDto(line)
+    expect(dto.status).toBe('billed')
   })
 })

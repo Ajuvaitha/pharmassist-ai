@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { seed } from '../../../prisma/seed'
 import { getTestPrisma, resetDatabase } from '../../test/db'
 import { listActivity } from './service'
+import { AppError } from '../../errors'
 import type { SessionUser } from '@pharmassist/shared'
 
 const prisma = getTestPrisma()
@@ -80,5 +81,10 @@ describe('listActivity', () => {
     expect(texts).toContain('ward 4A event')
     expect(texts).toContain('pharmacy-wide event')
     expect(texts).not.toContain('ward 2D event')
+  })
+
+  it("rejects a nurse whose account has no assigned ward instead of returning every ward's activity", async () => {
+    const viewer: SessionUser = { ...(await viewerFor('a.owusu')), ward: null }
+    await expect(listActivity(prisma, viewer, { limit: 50 })).rejects.toBeInstanceOf(AppError)
   })
 })

@@ -59,6 +59,14 @@ describe('listPatients', () => {
     expect(error).toBeInstanceOf(AppError)
     expect(error.statusCode).toBe(403)
   })
+
+  it('rejects a nurse whose account has no assigned ward instead of returning every patient', async () => {
+    const viewer: SessionUser = { ...(await viewerFor('a.owusu')), ward: null }
+    const error = await listPatients(prisma, viewer, {}).catch((e) => e)
+
+    expect(error).toBeInstanceOf(AppError)
+    expect(error.statusCode).toBe(403)
+  })
 })
 
 describe('getPatient', () => {
@@ -76,6 +84,15 @@ describe('getPatient', () => {
   it('denies a nurse a patient outside their ward, rather than pretending it is missing', async () => {
     const outsider = await prisma.patient.findFirstOrThrow({ where: { ward: { code: 'Ward 2D' } } })
     const error = await getPatient(prisma, await viewerFor('a.owusu'), outsider.id).catch((e) => e)
+
+    expect(error).toBeInstanceOf(AppError)
+    expect(error.statusCode).toBe(403)
+  })
+
+  it('rejects a nurse whose account has no assigned ward instead of granting access', async () => {
+    const [patient] = await listPatients(prisma, await viewerFor('k.asante'), {})
+    const viewer: SessionUser = { ...(await viewerFor('a.owusu')), ward: null }
+    const error = await getPatient(prisma, viewer, patient.id).catch((e) => e)
 
     expect(error).toBeInstanceOf(AppError)
     expect(error.statusCode).toBe(403)

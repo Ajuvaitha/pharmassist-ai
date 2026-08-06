@@ -79,4 +79,27 @@ describe('seed', () => {
     expect(nurse.ward?.code).toBe('Ward 4A')
     expect(pharmacist.wardId).toBeNull()
   })
+
+  it('rejects a duplicate prescription for the same patient, drug and start date', async () => {
+    await seed(prisma)
+
+    const existing = await prisma.prescription.findFirstOrThrow()
+
+    await expect(
+      prisma.prescription.create({
+        data: {
+          patientId: existing.patientId,
+          drugId: existing.drugId,
+          dose: existing.dose,
+          route: existing.route,
+          frequency: existing.frequency,
+          foodTiming: existing.foodTiming,
+          timeOfDay: existing.timeOfDay,
+          startDate: existing.startDate,
+          durationDays: existing.durationDays,
+          prescribedById: existing.prescribedById,
+        },
+      }),
+    ).rejects.toThrow()
+  })
 })

@@ -95,20 +95,18 @@ export async function seed(prisma: PrismaClient): Promise<void> {
         where: { username: rx.prescribedBy },
       })
 
-      // Prescriptions have no natural unique key, so identity here is
-      // (patient, drug, startDate). Re-seeding must not duplicate them.
-      const existing = await prisma.prescription.findFirst({
+      // Identity here is (patient, drug, startDate), enforced by a unique
+      // constraint. Upsert on it so re-seeding cannot race or duplicate.
+      await prisma.prescription.upsert({
         where: {
-          patientId: record.id,
-          drugId: drug.id,
-          startDate: new Date(rx.startDate),
+          patientId_drugId_startDate: {
+            patientId: record.id,
+            drugId: drug.id,
+            startDate: new Date(rx.startDate),
+          },
         },
-      })
-
-      if (existing) continue
-
-      await prisma.prescription.create({
-        data: {
+        update: {},
+        create: {
           patientId: record.id,
           drugId: drug.id,
           dose: rx.dose,

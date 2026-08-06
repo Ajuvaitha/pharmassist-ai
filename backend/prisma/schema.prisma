@@ -225,8 +225,14 @@ model Prescription {
 
   indentLines IndentLine[]
 
+  // A patient cannot hold two prescriptions for the same drug starting the
+  // same day. This is what lets the seed upsert instead of racing on
+  // findFirst-then-create.
+  @@unique([patientId, drugId, startDate])
   @@index([patientId, status])
-  @@index([status, startDate])
+  // startDate leads: the sweep filters "started on or before today", and
+  // status is `active` for nearly every row, so it is not selective.
+  @@index([startDate, status])
   @@index([drugId])
 }
 

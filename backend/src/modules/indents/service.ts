@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import {
   dosesPerDay,
   isDueOn,
@@ -136,11 +137,30 @@ export async function runSweep(prisma: PrismaClient, opts: SweepOptions = {}): P
     // Unique (wardId, indentDate) makes this safe to re-run; unique
     // (indentId, prescriptionId) plus skipDuplicates makes the lines safe
     // too, without a read-then-write race.
-    const indent = await prisma.dailyIndent.upsert({
-      where: { wardId_indentDate: { wardId: ward.id, indentDate: date } },
-      update: {},
-      create: { wardId: ward.id, indentDate: date, status: 'pending' },
-    })
+    //
+    // Prisma's upsert is NOT a single INSERT ... ON CONFLICT here — it
+    // compiles to a SELECT followed by an INSERT (or UPDATE). Under
+    // concurrent callers (the 06:00 scheduled job racing a pharmacist's
+    // manual "Run sweep") two callers can both miss the SELECT and both
+    // attempt the INSERT; the loser hits the unique constraint as a raw
+    // P2002 instead of the upsert's usual "update" branch. No duplicate
+    // row is ever created — the constraint holds — but left uncaught this
+    // surfaces as an unhandled 500 for what is a benign "someone else
+    // created it first". Catch it and re-read the row the winner created.
+    const indent = await prisma.dailyIndent
+      .upsert({
+        where: { wardId_indentDate: { wardId: ward.id, indentDate: date } },
+        update: {},
+        create: { wardId: ward.id, indentDate: date, status: 'pending' },
+      })
+      .catch(async (error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          return prisma.dailyIndent.findUniqueOrThrow({
+            where: { wardId_indentDate: { wardId: ward.id, indentDate: date } },
+          })
+        }
+        throw error
+      })
 
     // A prescription written after the ward already collected its
     // medication for the day must not land in a closed indent.

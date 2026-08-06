@@ -284,4 +284,28 @@ describe('runSweep', () => {
       AppError,
     )
   })
+
+  it('resolves both callers and creates exactly one indent when two sweeps race for the same ward and day', async () => {
+    // Prisma's upsert on DailyIndent is not a single INSERT ... ON
+    // CONFLICT — it is a SELECT followed by an INSERT/UPDATE. Fired
+    // concurrently (the 06:00 scheduled job racing a pharmacist's manual
+    // "Run sweep"), several callers can miss the SELECT and race the
+    // INSERT; the losers must hit the unique constraint and recover by
+    // re-reading, not surface an unhandled P2002 as a 500.
+    const ward = await prisma.ward.findUniqueOrThrow({ where: { code: 'Ward 4A' } })
+
+    const results = await Promise.all(
+      Array.from({ length: 30 }, () => runSweep(prisma, { date: DURING_COURSE, wardId: ward.id })),
+    )
+
+    expect(results).toHaveLength(30)
+    for (const result of results) {
+      expect(result.wards[0]?.wardId).toBe(ward.id)
+    }
+
+    const indents = await prisma.dailyIndent.findMany({
+      where: { wardId: ward.id, indentDate: DURING_COURSE },
+    })
+    expect(indents).toHaveLength(1)
+  })
 })

@@ -8,7 +8,7 @@ import { inventoryKeyPrefix } from './inventory'
 import { wardsQueryKey } from './wards'
 
 export const pickupListKeyPrefix = ['pickup-list'] as const
-export const pickupListQueryKey = (wardId: string, date?: string) =>
+const pickupListQueryKey = (wardId: string, date?: string) =>
   [...pickupListKeyPrefix, wardId, date ?? 'today'] as const
 
 export function usePickupList(wardId: string | null, date?: string) {
@@ -19,8 +19,8 @@ export function usePickupList(wardId: string | null, date?: string) {
   })
 }
 
-/** Dispensing changes stock, billing and the ward's sweep status too. */
-function useInvalidateAfterDispense() {
+/** Dispensing or sweeping changes stock, billing and the ward's sweep status too. */
+function useInvalidateWardState() {
   const client = useQueryClient()
   return () => {
     client.invalidateQueries({ queryKey: pickupListKeyPrefix })
@@ -32,7 +32,7 @@ function useInvalidateAfterDispense() {
 }
 
 export function useDispense() {
-  const invalidate = useInvalidateAfterDispense()
+  const invalidate = useInvalidateWardState()
 
   return useMutation({
     mutationFn: (input: { patientId: string; wardId: string; date?: string }) =>
@@ -42,11 +42,15 @@ export function useDispense() {
 }
 
 export function useSweep() {
-  const invalidate = useInvalidateAfterDispense()
+  const invalidate = useInvalidateWardState()
 
   return useMutation({
     mutationFn: (input: { date?: string; wardId?: string; preview?: boolean } = {}) =>
       apiPost<SweepResult>('/api/indents/sweep', input),
-    onSuccess: invalidate,
+    onSuccess: (_result, input) => {
+      // A preview writes nothing, so there is nothing to refetch.
+      if (input?.preview) return
+      invalidate()
+    },
   })
 }

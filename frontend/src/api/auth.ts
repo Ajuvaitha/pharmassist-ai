@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { LoginRequest, LoginResponse, SessionUser } from '@pharmassist/shared'
 import { ApiError, apiGet, apiPost } from './client'
 
-export const meQueryKey = ['auth', 'me'] as const
+const meQueryKey = ['auth', 'me'] as const
 
 /**
  * Resolves to null rather than throwing when there is no session, so the

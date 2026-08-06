@@ -7,7 +7,7 @@ import { loadEnv } from '../env'
 import { AppError } from '../errors'
 import { getSessionUser } from '../modules/auth/service'
 
-export const SESSION_COOKIE = 'pharmassist_session'
+const SESSION_COOKIE = 'pharmassist_session'
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12
 
 /**

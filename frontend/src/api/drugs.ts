@@ -3,7 +3,7 @@ import type { Drug } from '@pharmassist/shared'
 import { apiGet } from './client'
 import { buildQuery } from './query'
 
-export const drugsQueryKey = (search?: string) => ['drugs', search ?? ''] as const
+const drugsQueryKey = (search?: string) => ['drugs', search ?? ''] as const
 
 export function useDrugs(search?: string) {
   return useQuery<Drug[]>({

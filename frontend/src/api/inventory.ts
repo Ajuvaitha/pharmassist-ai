@@ -10,8 +10,8 @@ export interface InventoryQuery {
 }
 
 export const inventoryKeyPrefix = ['inventory'] as const
-export const inventoryQueryKey = (query: InventoryQuery = {}) => [...inventoryKeyPrefix, query] as const
-export const categoriesQueryKey = [...inventoryKeyPrefix, 'categories'] as const
+const inventoryQueryKey = (query: InventoryQuery = {}) => [...inventoryKeyPrefix, query] as const
+const categoriesQueryKey = [...inventoryKeyPrefix, 'categories'] as const
 
 export function useInventory(query: InventoryQuery = {}) {
   return useQuery<InventoryItem[]>({

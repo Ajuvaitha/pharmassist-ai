@@ -11,8 +11,8 @@ export interface PatientsQuery {
 }
 
 export const patientsKeyPrefix = ['patients'] as const
-export const patientsQueryKey = (query: PatientsQuery = {}) => [...patientsKeyPrefix, query] as const
-export const patientQueryKey = (id: string) => [...patientsKeyPrefix, 'detail', id] as const
+const patientsQueryKey = (query: PatientsQuery = {}) => [...patientsKeyPrefix, query] as const
+const patientQueryKey = (id: string) => [...patientsKeyPrefix, 'detail', id] as const
 
 export function usePatients(query: PatientsQuery = {}) {
   return useQuery<Patient[]>({

@@ -10,7 +10,7 @@ export interface BillingQueryInput {
 }
 
 export const billingKeyPrefix = ['billing'] as const
-export const billingQueryKey = (query: BillingQueryInput = {}) => [...billingKeyPrefix, query] as const
+const billingQueryKey = (query: BillingQueryInput = {}) => [...billingKeyPrefix, query] as const
 
 export function useBilling(query: BillingQueryInput = {}) {
   return useQuery<PatientBillingGroup[]>({

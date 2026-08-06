@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Role } from './domain'
 
-export interface SessionWard {
+interface SessionWard {
   id: string
   code: string
   name: string

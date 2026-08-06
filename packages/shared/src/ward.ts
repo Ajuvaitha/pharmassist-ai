@@ -1,4 +1,4 @@
-export const WARD_SEPARATOR = ' — '
+const WARD_SEPARATOR = ' — '
 
 /** Composes the display string the UI shows, e.g. "Ward 4A — General Medicine". */
 export function wardLabel(ward: { code: string; name: string }): string {

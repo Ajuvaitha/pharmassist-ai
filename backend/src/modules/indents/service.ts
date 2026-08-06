@@ -3,11 +3,17 @@ import {
   dosesPerDay,
   isDueOn,
   isSweepable,
+  type DispenseRequest,
+  type SessionUser,
   type SweepResult,
   type SweepWardResult,
+  type WardPickupList,
 } from '@pharmassist/shared'
-import { startOfUtcDay, toDateString, treatmentDayFor } from '../../domain/dates'
+import { ErrorCode } from '@pharmassist/shared'
+import { startOfUtcDay, toDateString, todayUtc, treatmentDayFor } from '../../domain/dates'
 import { AppError } from '../../errors'
+import { decimalToNumber } from '../../domain/dto'
+import { assertWardAccess } from '../patients/service'
 
 export interface SweepOptions {
   date?: Date
@@ -166,4 +172,203 @@ export async function runSweep(prisma: PrismaClient, opts: SweepOptions = {}): P
   }
 
   return { date: toDateString(date), preview, wards: results }
+}
+
+export async function getPickupList(
+  prisma: PrismaClient,
+  viewer: SessionUser,
+  wardId: string,
+  date: Date = todayUtc(),
+): Promise<WardPickupList> {
+  assertWardAccess(viewer, wardId)
+
+  const ward = await prisma.ward.findUnique({ where: { id: wardId } })
+  if (!ward) throw AppError.notFound(`No ward found with id ${wardId}`)
+
+  const indent = await prisma.dailyIndent.findUnique({
+    where: { wardId_indentDate: { wardId, indentDate: date } },
+    include: {
+      lines: {
+        where: { status: { not: 'cancelled' } },
+        include: { patient: true, drug: true, prescription: true },
+        orderBy: [{ patient: { bed: 'asc' } }, { drug: { label: 'asc' } }],
+      },
+    },
+  })
+
+  if (!indent) {
+    return { wardId, wardCode: ward.code, date: toDateString(date), status: 'pending', patients: [] }
+  }
+
+  const byPatient = new Map<string, WardPickupList['patients'][number]>()
+
+  for (const line of indent.lines) {
+    let entry = byPatient.get(line.patientId)
+    if (!entry) {
+      entry = {
+        patientId: line.patientId,
+        name: line.patient.name,
+        mrn: line.patient.mrn,
+        bed: line.patient.bed,
+        medicines: [],
+        dispensed: true,
+      }
+      byPatient.set(line.patientId, entry)
+    }
+
+    entry.medicines.push({
+      lineId: line.id,
+      drug: line.drug.label,
+      dose: line.prescription.dose,
+      route: line.prescription.route,
+      qty: line.qty,
+      treatmentDay: line.treatmentDay,
+      durationDays: line.prescription.durationDays,
+      status: line.status,
+    })
+
+    // A patient counts as dispensed only when every one of their lines is.
+    if (line.status !== 'dispensed') entry.dispensed = false
+  }
+
+  return {
+    wardId,
+    wardCode: ward.code,
+    date: toDateString(date),
+    status: indent.status,
+    patients: [...byPatient.values()],
+  }
+}
+
+export interface DispenseResult {
+  patientId: string
+  lines: number
+  total: number
+}
+
+/**
+ * Moves stock and creates money in one all-or-nothing transaction.
+ *
+ * Stock is checked for every line BEFORE any write, so a shortfall on the
+ * last line cannot leave the first few already deducted. The unit price is
+ * snapshotted here rather than referenced, so a later catalog change
+ * cannot rewrite what a patient was billed.
+ */
+export async function dispense(
+  prisma: PrismaClient,
+  actor: SessionUser,
+  // DispenseRequest.date is the wire ISO-string; callers here (the route
+  // and the tests) already hold a parsed Date, so this overrides that
+  // field rather than intersecting with it — `DispenseRequest & { date?:
+  // Date }` would otherwise demand a value that is simultaneously a
+  // string and a Date, which nothing can satisfy.
+  input: Omit<DispenseRequest, 'date'> & { date?: Date },
+): Promise<DispenseResult> {
+  const date = input.date ?? todayUtc()
+  assertWardAccess(actor, input.wardId)
+
+  return prisma.$transaction(async (tx) => {
+    const lines = await tx.indentLine.findMany({
+      where: {
+        patientId: input.patientId,
+        indent: { wardId: input.wardId, indentDate: date },
+        status: { not: 'cancelled' },
+      },
+      include: { drug: { include: { inventoryItem: true } }, patient: { include: { ward: true } }, indent: true },
+    })
+
+    if (lines.length === 0) {
+      throw AppError.notFound('No pending medication for that patient on that date')
+    }
+
+    const pending = lines.filter((line) => line.status === 'pending')
+    if (pending.length === 0) {
+      throw AppError.conflict(
+        ErrorCode.BATCH_ALREADY_FULFILLED,
+        `Medication for ${lines[0].patient.name} was already dispensed on ${toDateString(date)}`,
+      )
+    }
+
+    // Check every line before writing any of them.
+    for (const line of pending) {
+      const stock = line.drug.inventoryItem
+      if (!stock) {
+        throw AppError.conflict(ErrorCode.INSUFFICIENT_STOCK, `${line.drug.label} has no inventory record`)
+      }
+      if (stock.currentStock < line.qty) {
+        throw AppError.conflict(
+          ErrorCode.INSUFFICIENT_STOCK,
+          `${line.drug.label}: ${stock.currentStock} in stock, ${line.qty} required`,
+        )
+      }
+    }
+
+    let total = 0
+
+    for (const line of pending) {
+      await tx.inventoryItem.update({
+        where: { drugId: line.drugId },
+        data: { currentStock: { decrement: line.qty } },
+      })
+
+      await tx.stockMovement.create({
+        data: {
+          drugId: line.drugId,
+          delta: -line.qty,
+          reason: 'dispense',
+          indentLineId: line.id,
+          actorId: actor.id,
+        },
+      })
+
+      await tx.indentLine.update({
+        where: { id: line.id },
+        data: { status: 'dispensed', dispensedById: actor.id, dispensedAt: new Date() },
+      })
+
+      const unitPrice = line.drug.unitPrice
+      const lineTotal = unitPrice.mul(line.qty)
+      total += decimalToNumber(lineTotal)
+
+      await tx.billingLine.create({
+        data: {
+          indentLineId: line.id,
+          patientId: line.patientId,
+          wardId: input.wardId,
+          drugId: line.drugId,
+          qty: line.qty,
+          unitPrice,
+          total: lineTotal,
+          status: 'pending',
+        },
+      })
+    }
+
+    const patient = pending[0].patient
+    const summary = pending.map((line) => `${line.drug.label} × ${line.qty}`).join(' + ')
+
+    await tx.activityEvent.create({
+      data: {
+        type: 'dispense',
+        patientId: patient.id,
+        wardId: input.wardId,
+        drugId: pending[0].drugId,
+        actorId: actor.id,
+        text: `Dispensed ${summary} — ${patient.name} (${patient.ward.code})`,
+      },
+    })
+
+    const stillOpen = await tx.indentLine.count({
+      where: { indentId: pending[0].indentId, status: 'pending' },
+    })
+
+    if (stillOpen === 0) {
+      await tx.dailyIndent.update({
+        where: { id: pending[0].indentId },
+        data: { status: 'dispensed' },
+      })
+    }
+
+    return { patientId: input.patientId, lines: pending.length, total }
+  })
 }

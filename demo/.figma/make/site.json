@@ -1,0 +1,10 @@
+{
+  "description": "Streamline hospital pharmacy operations with a user-friendly interface for pharmacists, nurses, and doctors to manage patient medications and ward activities.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

@@ -14,7 +14,7 @@ import { ErrorCode } from '@pharmassist/shared'
 import { startOfUtcDay, toDateString, todayUtc, treatmentDayFor } from '../../domain/dates'
 import { AppError } from '../../errors'
 import { decimalToNumber } from '../../domain/dto'
-import { assertWardAccess } from '../patients/service'
+import { assertWardAccess } from '../../domain/scoping'
 
 export interface SweepOptions {
   date?: Date

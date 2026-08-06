@@ -2,7 +2,7 @@ import { Prisma, type PrismaClient } from '@prisma/client'
 import { ErrorCode, type ConfirmBillingRequest, type PatientBillingGroup, type SessionUser } from '@pharmassist/shared'
 import { AppError } from '../../errors'
 import { decimalToNumber, toTransactionDto } from '../../domain/dto'
-import { assertWardAccess } from '../patients/service'
+import { assertWardAccess, wardScopeFor } from '../../domain/scoping'
 import { startOfUtcDay } from '../../domain/dates'
 
 const lineInclude = {
@@ -62,15 +62,6 @@ function group(lines: LineWithRelations[]): PatientBillingGroup[] {
   return [...groups.values()].map((entry) => ({ ...entry, total: decimalToNumber(entry.total) }))
 }
 
-function scopeFor(viewer: SessionUser, requestedWardId?: string): Prisma.BillingLineWhereInput {
-  if (viewer.role === 'nurse') {
-    if (!viewer.ward) throw AppError.forbidden('Your account has no assigned ward')
-    if (requestedWardId) assertWardAccess(viewer, requestedWardId)
-    return { wardId: viewer.ward.id }
-  }
-  return requestedWardId ? { wardId: requestedWardId } : {}
-}
-
 export async function listBilling(
   prisma: PrismaClient,
   viewer: SessionUser,
@@ -78,7 +69,7 @@ export async function listBilling(
 ): Promise<PatientBillingGroup[]> {
   const lines = await prisma.billingLine.findMany({
     where: {
-      ...scopeFor(viewer, query.wardId),
+      ...wardScopeFor(viewer, query.wardId),
       ...(query.date ? { indentLine: { indent: { indentDate: startOfUtcDay(query.date) } } } : {}),
     },
     include: lineInclude,

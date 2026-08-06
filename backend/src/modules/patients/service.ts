@@ -4,6 +4,7 @@ import { ErrorCode } from '@pharmassist/shared'
 import { AppError } from '../../errors'
 import { toPatientDto } from '../../domain/dto'
 import { parseIsoDate, todayUtc } from '../../domain/dates'
+import { assertWardAccess, wardScopeFor } from '../../domain/scoping'
 
 const patientInclude = {
   ward: true,
@@ -12,30 +13,6 @@ const patientInclude = {
     orderBy: { prescribedAt: 'desc' },
   },
 } satisfies Prisma.PatientInclude
-
-/**
- * A nurse may only reach their own ward. Denying rather than filtering
- * matters: a filtered-empty result is indistinguishable from "no such
- * patient", and a 404 would leak whether the record exists.
- *
- * For any non-nurse role this is a no-op, and in all cases it never
- * validates that `wardId` actually exists — callers are responsible for
- * checking the ward exists themselves.
- */
-export function assertWardAccess(viewer: SessionUser, wardId: string): void {
-  if (viewer.role !== 'nurse') return
-  if (viewer.ward && viewer.ward.id === wardId) return
-  throw AppError.forbidden('You do not have access to that ward')
-}
-
-function scopeFor(viewer: SessionUser, requestedWardId?: string): Prisma.PatientWhereInput {
-  if (viewer.role === 'nurse') {
-    if (!viewer.ward) throw AppError.forbidden('Your account has no assigned ward')
-    if (requestedWardId) assertWardAccess(viewer, requestedWardId)
-    return { wardId: viewer.ward.id }
-  }
-  return requestedWardId ? { wardId: requestedWardId } : {}
-}
 
 export async function listPatients(
   prisma: PrismaClient,
@@ -47,7 +24,7 @@ export async function listPatients(
 
   const patients = await prisma.patient.findMany({
     where: {
-      ...scopeFor(viewer, query.wardId),
+      ...wardScopeFor(viewer, query.wardId),
       ...(search
         ? {
             OR: [

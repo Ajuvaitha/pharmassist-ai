@@ -10,7 +10,7 @@ import { AppError } from '../../errors'
 import { toFoodTimingEnum } from '../../domain/enums'
 import { toPrescriptionDto } from '../../domain/dto'
 import { parseIsoDate, todayUtc } from '../../domain/dates'
-import { assertWardAccess } from '../patients/service'
+import { assertWardAccess } from '../../domain/scoping'
 import { closeIndentIfComplete } from '../indents/service'
 
 const rxInclude = { drug: true, prescribedBy: true } satisfies Prisma.PrescriptionInclude

@@ -1,4 +1,4 @@
-import type { MedRoute, SweepStatus } from './domain'
+import type { MedRoute, SweepStatus, Transaction } from './domain'
 
 export interface PickupLine {
   lineId: string
@@ -42,4 +42,14 @@ export interface SweepResult {
   date: string
   preview: boolean
   wards: SweepWardResult[]
+}
+
+export interface PatientBillingGroup {
+  patientId: string
+  patient: string
+  ward: string
+  transactions: Transaction[]
+  total: number
+  pendingCount: number
+  billed: boolean
 }

@@ -13,6 +13,7 @@ import prescriptionRoutes from './modules/prescriptions/routes'
 import inventoryRoutes from './modules/inventory/routes'
 import activityRoutes from './modules/activity/routes'
 import indentRoutes from './modules/indents/routes'
+import billingRoutes from './modules/billing/routes'
 
 export interface BuildAppOptions {
   /** Supplied by tests to pin the app to the test database. */
@@ -39,6 +40,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(inventoryRoutes)
   await app.register(activityRoutes)
   await app.register(indentRoutes)
+  await app.register(billingRoutes)
 
   return app
 }

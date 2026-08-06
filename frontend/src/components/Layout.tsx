@@ -1,3 +1,4 @@
+import { parseWardCode } from '@pharmassist/shared';
 import type { Role, Page } from '../types';
 
 interface LayoutProps {
@@ -6,6 +7,7 @@ interface LayoutProps {
   user: string;
   ward: string;
   onNavigate: (page: Page) => void;
+  onLogout: () => void;
   children: React.ReactNode;
 }
 
@@ -45,7 +47,7 @@ const ROLE_COLORS: Record<Role, { bg: string; color: string }> = {
   doctor:     { bg: '#FEF3C7', color: '#D97706' },
 };
 
-export default function Layout({ role, page, user, ward, onNavigate, children }: LayoutProps) {
+export default function Layout({ role, page, user, ward, onNavigate, onLogout, children }: LayoutProps) {
   const items = navItems(role);
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -143,7 +145,7 @@ export default function Layout({ role, page, user, ward, onNavigate, children }:
             </div>
           </div>
           {role === 'nurse' && (
-            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8, paddingLeft: 2 }}>{ward.split(' — ')[0]}</div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8, paddingLeft: 2 }}>{parseWardCode(ward)}</div>
           )}
         </div>
       </aside>
@@ -167,7 +169,7 @@ export default function Layout({ role, page, user, ward, onNavigate, children }:
             {role === 'nurse' && (
               <>
                 <span style={{ color: '#CBD5E1', fontSize: 12 }}>/</span>
-                <span style={{ fontSize: 12, color: '#0F172A', fontWeight: 500 }}>{ward.split(' — ')[0]}</span>
+                <span style={{ fontSize: 12, color: '#0F172A', fontWeight: 500 }}>{parseWardCode(ward)}</span>
               </>
             )}
           </div>
@@ -194,11 +196,17 @@ export default function Layout({ role, page, user, ward, onNavigate, children }:
             </div>
 
             {/* User chip */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '4px 10px', border: '1px solid #D9E8EF',
-              borderRadius: 20, cursor: 'pointer', background: '#F8FBFC',
-            }}>
+            <button
+              type="button"
+              onClick={onLogout}
+              title="Sign out"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '4px 10px', border: '1px solid #D9E8EF',
+                borderRadius: 20, cursor: 'pointer', background: '#F8FBFC',
+                fontFamily: 'inherit',
+              }}
+            >
               <div style={{
                 width: 22, height: 22, borderRadius: '50%',
                 background: ROLE_COLORS[role].bg,
@@ -211,7 +219,7 @@ export default function Layout({ role, page, user, ward, onNavigate, children }:
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M2.5 4l2.5 2.5L7.5 4" stroke="#94A3B8" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </div>
+            </button>
           </div>
         </header>
 

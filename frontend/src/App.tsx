@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { Role, Page, Patient, Prescription } from './types';
+import type { Page, Patient, Prescription } from './types';
 import { INITIAL_PATIENTS } from './data';
+import { useLogout, useMe } from './api/auth';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import WardSweepPage from './pages/WardSweepPage';
@@ -15,22 +16,14 @@ import RecentActivityPage from './pages/RecentActivityPage';
 import Layout from './components/Layout';
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [role, setRole] = useState<Role>('pharmacist');
-  const [page, setPage] = useState<Page>('dashboard');
-  const [user, setUser] = useState('K. Asante');
-  const [ward, setWard] = useState('Ward 4A — General Medicine');
+  const { data: me, isLoading } = useMe();
+  const logout = useLogout();
+
+  const [page, setPage] = useState<Page | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
+  // Phase 3 replaces this with server data.
   const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS);
-
-  const handleLogin = (r: Role, u: string, w: string) => {
-    setRole(r);
-    setUser(u || (r === 'pharmacist' ? 'K. Asante' : r === 'nurse' ? 'A. Owusu' : 'Dr. B. Kwame'));
-    setWard(w);
-    setPage(r === 'doctor' ? 'doctor-patients' : 'dashboard');
-    setLoggedIn(true);
-  };
 
   const navigate = (p: Page) => {
     setPage(p);
@@ -70,12 +63,29 @@ export default function App() {
     ));
   };
 
-  if (!loggedIn) return <LoginPage onLogin={handleLogin} />;
+  if (isLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#F0F9FB',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 13, color: '#64748B',
+      }}>
+        Loading…
+      </div>
+    );
+  }
 
+  if (!me) return <LoginPage />;
+
+  const role = me.role;
+  const user = me.displayName;
+  const ward = me.ward?.label ?? '';
+  // Doctors land on their own patient list; everyone else on the dashboard.
+  const activePage: Page = page ?? (role === 'doctor' ? 'doctor-patients' : 'dashboard');
   const selectedPatient = selectedPatientId ? patients.find(p => p.id === selectedPatientId) : null;
 
   const renderPage = () => {
-    switch (page) {
+    switch (activePage) {
       case 'dashboard':
         return <DashboardPage role={role} ward={ward} patients={patients} />;
       case 'ward-sweep':
@@ -111,7 +121,14 @@ export default function App() {
   };
 
   return (
-    <Layout role={role} page={page} user={user} ward={ward} onNavigate={navigate}>
+    <Layout
+      role={role}
+      page={activePage}
+      user={user}
+      ward={ward}
+      onNavigate={navigate}
+      onLogout={() => logout.mutate()}
+    >
       {renderPage()}
     </Layout>
   );

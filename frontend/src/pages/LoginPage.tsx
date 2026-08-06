@@ -1,28 +1,24 @@
-import { useState } from 'react';
-import type { Role } from '../types';
+import { useState } from 'react'
+import { ApiError } from '../api/client'
+import { useLogin } from '../api/auth'
 
-interface LoginPageProps {
-  onLogin: (role: Role, user: string, ward: string) => void;
-}
-
-const ROLES: { value: Role; label: string; description: string }[] = [
-  { value: 'pharmacist', label: 'Pharmacist', description: 'Full dispensing & inventory access' },
-  { value: 'nurse', label: 'Nurse', description: 'Ward-scoped pickup & patient view' },
-  { value: 'doctor', label: 'Doctor', description: 'Read-only prescription reference' },
-];
-
-const WARDS = ['Ward 4A — General Medicine', 'Ward 5B — Cardiology', 'Ward 6C — Orthopaedics', 'Ward 2D — Oncology'];
-
-export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [role, setRole] = useState<Role>('pharmacist');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [ward, setWard] = useState(WARDS[0]);
+export default function LoginPage() {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const login = useLogin()
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onLogin(role, username || 'K. Asante', ward);
-  };
+    e.preventDefault()
+    if (!username || !password) return
+    login.mutate({ username, password })
+  }
+
+  const errorMessage =
+    login.error instanceof ApiError
+      ? login.error.message
+      : login.error
+        ? 'Could not reach the server. Check your connection and try again.'
+        : null
 
   return (
     <div style={{
@@ -66,38 +62,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           flexDirection: 'column',
           gap: 20,
         }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 10 }}>
-              Sign in as
-            </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {ROLES.map(r => (
-                <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => setRole(r.value)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    border: role === r.value ? '1px solid #0AADA8' : '1px solid #D9E8EF',
-                    borderRadius: 6,
-                    background: role === r.value ? '#D4F0EF' : '#fff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.12s',
-                  }}
-                >
-                  <span style={{ fontSize: 14, fontWeight: 500, color: role === r.value ? '#0AADA8' : '#0F172A' }}>
-                    {r.label}
-                  </span>
-                  <span style={{ fontSize: 12, color: '#64748B' }}>{r.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
               <label style={labelStyle}>Username</label>
@@ -106,6 +70,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 placeholder="e.g. k.asante"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
+                autoComplete="username"
                 style={inputStyle}
               />
             </div>
@@ -116,22 +81,28 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 placeholder="••••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
                 style={inputStyle}
               />
             </div>
-
-            {role === 'nurse' && (
-              <div>
-                <label style={labelStyle}>Assigned Ward</label>
-                <select value={ward} onChange={e => setWard(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                  {WARDS.map(w => <option key={w}>{w}</option>)}
-                </select>
-              </div>
-            )}
           </div>
+
+          {errorMessage && (
+            <div style={{
+              padding: '10px 14px',
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: 6,
+              fontSize: 13,
+              color: '#DC2626',
+            }}>
+              {errorMessage}
+            </div>
+          )}
 
           <button
             type="submit"
+            disabled={login.isPending}
             style={{
               background: '#0AADA8',
               color: '#fff',
@@ -140,14 +111,17 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               padding: '11px 0',
               fontSize: 14,
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: login.isPending ? 'default' : 'pointer',
+              opacity: login.isPending ? 0.7 : 1,
               transition: 'opacity 0.12s',
             }}
-            onMouseOver={e => (e.currentTarget.style.opacity = '0.88')}
-            onMouseOut={e => (e.currentTarget.style.opacity = '1')}
           >
-            Sign in
+            {login.isPending ? 'Signing in…' : 'Sign in'}
           </button>
+
+          <p style={{ fontSize: 12, color: '#94A3B8', margin: 0, textAlign: 'center' }}>
+            Your role and assigned ward come from your account.
+          </p>
         </form>
 
         <p style={{ textAlign: 'center', fontSize: 12, color: '#64748B', marginTop: 20 }}>
@@ -155,7 +129,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         </p>
       </div>
     </div>
-  );
+  )
 }
 
 const labelStyle: React.CSSProperties = {
@@ -164,7 +138,7 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 500,
   color: '#64748B',
   marginBottom: 5,
-};
+}
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -177,4 +151,4 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   fontFamily: 'inherit',
   boxSizing: 'border-box',
-};
+}

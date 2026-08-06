@@ -593,6 +593,218 @@ broke on ward names containing an em-dash."
 
 ---
 
+## Task 2b: Restore the full prescribing frequency set
+
+**Why this task exists.** Task 1 derived `Frequency` from the seed data, which contains only `OD BD TDS QDS ON`. But `frontend/src/components/PrescriptionForm.tsx` offered eight codes — the five above plus `PRN`, `STAT`, and `Weekly`. When Task 2 pointed that form at the shared `FREQUENCIES`, those three silently disappeared from the dropdown, removing a doctor's ability to write as-needed, immediate, and weekly orders. This task restores them and teaches the model which codes the sweep can act on.
+
+**Files:**
+- Modify: `packages/shared/src/frequency.ts`
+- Test: `packages/shared/src/frequency.test.ts`
+
+**Interfaces:**
+- Produces: `FREQUENCIES` extended to all 8 codes; `dosesPerDay(f): number`; `isSweepable(f): boolean`; `isDueOn(frequency: Frequency, startDate: Date, date: Date): boolean`.
+
+**Semantics — these are clinical meanings, not arbitrary choices:**
+
+| Code | Meaning | dosesPerDay | Sweepable | Due on |
+|---|---|---|---|---|
+| `OD` | once daily | 1 | yes | every day |
+| `BD` | twice daily | 2 | yes | every day |
+| `TDS` | three times daily | 3 | yes | every day |
+| `QDS` | four times daily | 4 | yes | every day |
+| `ON` | at night | 1 | yes | every day |
+| `Weekly` | once weekly | 1 | yes | days where the whole-day offset from `startDate` is a multiple of 7 |
+| `PRN` | as needed | 0 | no | never — dispensed ad hoc on request |
+| `STAT` | immediately, once | 0 | no | never — a one-off given at prescribing time |
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `packages/shared/src/frequency.test.ts`, keeping the existing tests and importing the new functions:
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { FREQUENCIES, dosesPerDay, isDueOn, isFrequency, isSweepable } from './frequency'
+
+describe('FREQUENCIES', () => {
+  it('covers every code the prescribing form offers', () => {
+    expect([...FREQUENCIES]).toEqual(['OD', 'BD', 'TDS', 'QDS', 'ON', 'Weekly', 'PRN', 'STAT'])
+  })
+})
+
+describe('dosesPerDay', () => {
+  it('maps each scheduled code to its exact daily dose count', () => {
+    expect(dosesPerDay('OD')).toBe(1)
+    expect(dosesPerDay('BD')).toBe(2)
+    expect(dosesPerDay('TDS')).toBe(3)
+    expect(dosesPerDay('QDS')).toBe(4)
+    expect(dosesPerDay('ON')).toBe(1)
+    expect(dosesPerDay('Weekly')).toBe(1)
+  })
+
+  it('reports no scheduled daily dose for as-needed and one-off codes', () => {
+    expect(dosesPerDay('PRN')).toBe(0)
+    expect(dosesPerDay('STAT')).toBe(0)
+  })
+})
+
+describe('isSweepable', () => {
+  it('includes every code the ward sweep can act on', () => {
+    expect(FREQUENCIES.filter(isSweepable)).toEqual(['OD', 'BD', 'TDS', 'QDS', 'ON', 'Weekly'])
+  })
+
+  it('excludes as-needed and one-off codes', () => {
+    expect(isSweepable('PRN')).toBe(false)
+    expect(isSweepable('STAT')).toBe(false)
+  })
+})
+
+describe('isDueOn', () => {
+  const start = new Date('2026-08-03T00:00:00Z')
+
+  it('reports a daily code due on the start date and every day after', () => {
+    expect(isDueOn('TDS', start, new Date('2026-08-03T00:00:00Z'))).toBe(true)
+    expect(isDueOn('TDS', start, new Date('2026-08-04T00:00:00Z'))).toBe(true)
+    expect(isDueOn('TDS', start, new Date('2026-08-09T00:00:00Z'))).toBe(true)
+  })
+
+  it('reports a weekly code due only every seventh day from the start', () => {
+    expect(isDueOn('Weekly', start, new Date('2026-08-03T00:00:00Z'))).toBe(true)
+    expect(isDueOn('Weekly', start, new Date('2026-08-04T00:00:00Z'))).toBe(false)
+    expect(isDueOn('Weekly', start, new Date('2026-08-09T00:00:00Z'))).toBe(false)
+    expect(isDueOn('Weekly', start, new Date('2026-08-10T00:00:00Z'))).toBe(true)
+    expect(isDueOn('Weekly', start, new Date('2026-08-17T00:00:00Z'))).toBe(true)
+  })
+
+  it('ignores the time of day when comparing dates', () => {
+    expect(isDueOn('Weekly', start, new Date('2026-08-10T23:59:00Z'))).toBe(true)
+  })
+
+  it('never reports as-needed or one-off codes as due', () => {
+    expect(isDueOn('PRN', start, new Date('2026-08-03T00:00:00Z'))).toBe(false)
+    expect(isDueOn('STAT', start, new Date('2026-08-03T00:00:00Z'))).toBe(false)
+  })
+
+  it('reports nothing due before the start date', () => {
+    expect(isDueOn('OD', start, new Date('2026-08-02T00:00:00Z'))).toBe(false)
+    expect(isDueOn('Weekly', start, new Date('2026-07-27T00:00:00Z'))).toBe(false)
+  })
+})
+
+describe('isFrequency', () => {
+  it('accepts known codes', () => {
+    expect(isFrequency('TDS')).toBe(true)
+    expect(isFrequency('PRN')).toBe(true)
+  })
+
+  it('rejects unknown codes', () => {
+    expect(isFrequency('QID')).toBe(false)
+    expect(isFrequency('')).toBe(false)
+    expect(isFrequency('tds')).toBe(false)
+  })
+})
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm --filter @pharmassist/shared test`
+Expected: FAIL — `isSweepable` and `isDueOn` are not exported, and `FREQUENCIES` has 5 entries rather than 8.
+
+- [ ] **Step 3: Extend the frequency module**
+
+Replace the contents of `packages/shared/src/frequency.ts` with:
+
+```ts
+/**
+ * Hospital prescribing codes.
+ *
+ * The first five are taken every day. `Weekly` recurs every seventh day
+ * from the prescription's start date. `PRN` (as needed) and `STAT`
+ * (immediately, once) have no schedule at all — the ward sweep cannot
+ * generate indent lines for them, so they are dispensed ad hoc.
+ *
+ * dosesPerDay is the single source of truth for daily quantity: the
+ * sweep job and the UI both read it, so they cannot disagree.
+ */
+export const FREQUENCIES = ['OD', 'BD', 'TDS', 'QDS', 'ON', 'Weekly', 'PRN', 'STAT'] as const
+
+export type Frequency = (typeof FREQUENCIES)[number]
+
+const DOSES_PER_DAY: Record<Frequency, number> = {
+  OD: 1,
+  BD: 2,
+  TDS: 3,
+  QDS: 4,
+  ON: 1,
+  Weekly: 1,
+  // No scheduled daily dose. Zero is meaningful here, not a fallback.
+  PRN: 0,
+  STAT: 0,
+}
+
+/** Codes the ward sweep can generate indent lines for. */
+const SWEEPABLE: ReadonlySet<Frequency> = new Set<Frequency>([
+  'OD', 'BD', 'TDS', 'QDS', 'ON', 'Weekly',
+])
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+export function dosesPerDay(frequency: Frequency): number {
+  return DOSES_PER_DAY[frequency]
+}
+
+export function isSweepable(frequency: Frequency): boolean {
+  return SWEEPABLE.has(frequency)
+}
+
+export function isFrequency(value: string): value is Frequency {
+  return (FREQUENCIES as readonly string[]).includes(value)
+}
+
+/** Midnight UTC for a date, so comparisons ignore the time of day. */
+function startOfUtcDay(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+}
+
+/**
+ * Whether a prescription with this frequency calls for a dose on `date`.
+ * Nothing is ever due before the start date, and non-sweepable codes are
+ * never due at all.
+ */
+export function isDueOn(frequency: Frequency, startDate: Date, date: Date): boolean {
+  if (!isSweepable(frequency)) return false
+
+  const offsetDays = (startOfUtcDay(date) - startOfUtcDay(startDate)) / MS_PER_DAY
+  if (offsetDays < 0) return false
+
+  return frequency === 'Weekly' ? offsetDays % 7 === 0 : true
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `pnpm --filter @pharmassist/shared test`
+Expected: PASS — 16 tests.
+
+- [ ] **Step 5: Confirm the prescribing form offers all eight codes again**
+
+Run: `pnpm --filter figma-make-app exec tsc --noEmit && pnpm --filter figma-make-app build`
+Expected: Both succeed. `PrescriptionForm.tsx` imports `FREQUENCIES` from the shared package, so its dropdown now lists all eight without any change to that file.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/shared/src/frequency.ts packages/shared/src/frequency.test.ts
+git commit -m "fix(shared): restore PRN, STAT and Weekly prescribing codes
+
+Frequency was derived from seed data, which holds only the five daily
+codes, so pointing PrescriptionForm at the shared FREQUENCIES silently
+removed a doctor's ability to write as-needed, immediate and weekly
+orders. Adds isSweepable and isDueOn so the sweep knows PRN and STAT
+generate no indent lines and Weekly recurs every seventh day."
+```
+
+---
+
 ## Task 3: Postgres in Docker, Prisma schema, first migration
 
 **Files:**
@@ -781,12 +993,18 @@ enum MedRoute {
   Inhaled
 }
 
+// Eight prescribing codes. The first five are swept daily; Weekly is
+// swept only on its due day; PRN (as needed) and STAT (immediate,
+// one-off) are never auto-indented and are dispensed ad hoc.
 enum Frequency {
   OD
   BD
   TDS
   QDS
   ON
+  Weekly
+  PRN
+  STAT
 }
 
 // @map keeps the hyphenated wire format the UI already uses.

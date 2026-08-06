@@ -1,0 +1,12 @@
+{
+  "name": "pharmassist-ai",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:frontend": "pnpm --filter figma-make-app dev",
+    "dev:backend": "pnpm --filter @pharmassist/backend dev",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build"
+  }
+}

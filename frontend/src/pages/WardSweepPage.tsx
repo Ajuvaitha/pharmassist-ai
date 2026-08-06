@@ -44,15 +44,14 @@ function CheckIcon() {
 export default function WardSweepPage() {
   // TODO(Task 13): patients previously arrived as a prop; wire to a real hook.
   const patients: Patient[] = [];
-  const [activeWardId, setActiveWardId] = useState(WARDS[0].id);
+  const [activeWardId, setActiveWardId] = useState(WARDS[0]?.id ?? '');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   // per-patient dispense state: 'idle' | 'confirming' | 'dispensed'
   const [patientState, setPatientState] = useState<Record<string, 'confirming' | 'dispensed'>>({});
 
-  const activeWard = WARDS.find(w => w.id === activeWardId)!;
-  const wardShortName = activeWard.code;
-  const rawPickList = buildPatientPickList(wardShortName, patients);
+  const activeWard = WARDS.find(w => w.id === activeWardId) ?? null;
+  const rawPickList = activeWard ? buildPatientPickList(activeWard.code, patients) : [];
   const pickList = search
     ? rawPickList.filter(p =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -143,7 +142,9 @@ export default function WardSweepPage() {
 
       {/* Sweep status bar */}
       <div style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, padding: '16px 20px' }}>
-        <SweepBar ward={allDispensed ? { ...activeWard, sweepStatus: 'dispensed' } : activeWard} />
+        {activeWard && (
+          <SweepBar ward={allDispensed ? { ...activeWard, sweepStatus: 'dispensed' } : activeWard} />
+        )}
       </div>
 
       {/* Patient list */}

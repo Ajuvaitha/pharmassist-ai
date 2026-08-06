@@ -19,7 +19,7 @@ declare module 'fastify' {
   }
 
   interface FastifyRequest {
-    user: SessionUser
+    user: SessionUser | null
   }
 }
 
@@ -28,12 +28,12 @@ declare module '@fastify/jwt' {
     payload: { sub: string }
     // @fastify/jwt's own type declarations unconditionally add
     // `user: fastifyJwt.UserType` to FastifyRequest, where UserType
-    // resolves from this field. It must equal SessionUser (the type our
-    // own `declare module 'fastify'` block above gives FastifyRequest.user)
-    // or the two declarations of the same interface member conflict.
-    // The JWT subject claim is read from jwtVerify()'s return value
-    // instead, so this doesn't need to be the raw payload shape.
-    user: SessionUser
+    // resolves from this field. It must equal SessionUser | null (the type
+    // our own `declare module 'fastify'` block above gives
+    // FastifyRequest.user) or the two declarations of the same interface
+    // member conflict. The JWT subject claim is read from jwtVerify()'s
+    // return value instead, so this doesn't need to be the raw payload shape.
+    user: SessionUser | null
   }
 }
 
@@ -62,14 +62,20 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   })
 
   app.decorate('clearSession', (reply: FastifyReply) => {
-    reply.clearCookie(SESSION_COOKIE, { path: '/' })
+    reply.clearCookie(SESSION_COOKIE, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.NODE_ENV === 'production',
+      path: '/',
+    })
   })
 
   app.decorate('authenticate', async (request: FastifyRequest) => {
     let decoded: { sub: string }
     try {
       decoded = await request.jwtVerify<{ sub: string }>()
-    } catch {
+    } catch (err) {
+      request.log.debug({ err }, 'JWT verification failed')
       throw AppError.authExpired()
     }
 
@@ -80,7 +86,12 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
   app.decorate('requireRole', (...roles: Role[]): preHandlerHookHandler => {
     return async (request: FastifyRequest) => {
-      if (!roles.includes(request.user.role)) {
+      const user = request.user
+      if (!user) {
+        throw AppError.authExpired()
+      }
+
+      if (!roles.includes(user.role)) {
         throw AppError.forbidden(
           `This action requires one of: ${roles.join(', ')}`,
         )

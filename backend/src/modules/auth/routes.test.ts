@@ -173,4 +173,25 @@ describe('requireRole', () => {
     expect(response.statusCode).toBe(403)
     expect(response.json().error).toBe('FORBIDDEN')
   })
+
+  it('fails closed with AUTH_EXPIRED when registered without the authenticate preHandler', async () => {
+    const misconfiguredRoute: FastifyPluginAsync = async (instance) => {
+      instance.get(
+        '/api/misconfigured-only-pharmacists',
+        { preHandler: [instance.requireRole('pharmacist')] },
+        async () => ({ ok: true }),
+      )
+    }
+
+    const guarded = await buildTestApp(misconfiguredRoute)
+
+    const response = await guarded.inject({
+      method: 'GET',
+      url: '/api/misconfigured-only-pharmacists',
+    })
+    await guarded.close()
+
+    expect(response.statusCode).toBe(401)
+    expect(response.json().error).toBe('AUTH_EXPIRED')
+  })
 })

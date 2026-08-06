@@ -1,5 +1,6 @@
 import { loginRequestSchema, type LoginResponse } from '@pharmassist/shared'
 import type { FastifyPluginAsync } from 'fastify'
+import { AppError } from '../../errors'
 import { authenticate } from './service'
 
 const authRoutes: FastifyPluginAsync = async (app) => {
@@ -17,7 +18,14 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/api/auth/me',
     { preHandler: [app.authenticate] },
-    async (request): Promise<LoginResponse> => ({ user: request.user }),
+    async (request): Promise<LoginResponse> => {
+      // authenticate always assigns request.user before this handler runs;
+      // narrow here so the response type stays SessionUser, not SessionUser | null.
+      if (!request.user) {
+        throw AppError.authExpired()
+      }
+      return { user: request.user }
+    },
   )
 
   app.post('/api/auth/logout', async (_request, reply) => {

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { Patient } from '../types';
+import { WARDS as WARD_LIST } from '../data';
 
 interface RegisterPatientPageProps {
   onRegister: (patient: Patient) => void;
 }
 
-const WARDS = ['Ward 4A', 'Ward 5B', 'Ward 6C', 'Ward 2D'];
+const WARDS = WARD_LIST.map(w => w.code);
 const BEDS = Array.from({ length: 20 }, (_, i) => `Bed ${String(i + 1).padStart(2, '0')}`);
 
 function generateMRN() {
@@ -41,10 +42,12 @@ export default function RegisterPatientPage({ onRegister }: RegisterPatientPageP
       gender: form.gender,
       phone: form.phone.trim(),
       ward: form.ward,
+      wardId: WARD_LIST.find(w => w.code === form.ward)?.id ?? '',
       bed: form.bed,
       admissionDate: form.admissionDate,
       diagnosis: form.diagnosis.trim(),
       allergies: form.allergies.trim(),
+      status: 'admitted',
       prescriptions: [],
     };
     onRegister(patient);

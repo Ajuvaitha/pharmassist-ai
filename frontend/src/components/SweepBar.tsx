@@ -15,7 +15,7 @@ export default function SweepBar({ ward, compact = false }: SweepBarProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 4 : 6 }}>
       {!compact && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{ward.name}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{ward.label}</span>
           <span style={{ fontSize: 12, color: '#64748B' }}>{ward.activePatients} patients</span>
         </div>
       )}

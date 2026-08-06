@@ -49,7 +49,7 @@ export default function WardSweepPage({ patients }: WardSweepPageProps) {
   const [patientState, setPatientState] = useState<Record<string, 'confirming' | 'dispensed'>>({});
 
   const activeWard = WARDS.find(w => w.id === activeWardId)!;
-  const wardShortName = activeWard.name.split(' — ')[0];
+  const wardShortName = activeWard.code;
   const rawPickList = buildPatientPickList(wardShortName, patients);
   const pickList = search
     ? rawPickList.filter(p =>
@@ -134,7 +134,7 @@ export default function WardSweepPage({ patients }: WardSweepPageProps) {
               transition: 'color 0.1s',
             }}
           >
-            {ward.name.split(' — ')[0]}
+            {ward.code}
           </button>
         ))}
       </div>

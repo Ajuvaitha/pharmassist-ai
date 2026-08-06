@@ -22,7 +22,7 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
   const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
 
   const visibleWards = role === 'nurse'
-    ? WARDS.filter(w => ward.includes(w.name.split(' — ')[0]))
+    ? WARDS.filter(w => ward.includes(w.code))
     : WARDS;
 
   const activePatients = patients.filter(p =>
@@ -260,7 +260,7 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             {filteredWards.map(w => {
-              const wardPatients = patients.filter(p => p.ward.includes(w.name.split(' — ')[0]));
+              const wardPatients = patients.filter(p => p.ward.includes(w.code));
               const pendingRx = wardPatients.reduce((s, p) => s + p.prescriptions.filter(rx => rx.status === 'active').length, 0);
               const statusCounts = {
                 pending: w.sweepStatus === 'pending' ? w.activePatients : 0,
@@ -279,8 +279,8 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
                 <div key={w.id} style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, padding: '16px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{w.name.split(' — ')[0]}</div>
-                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{w.name.split(' — ')[1]}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{w.code}</div>
+                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{w.name}</div>
                     </div>
                     <span style={{
                       fontSize: 11, fontWeight: 600, padding: '3px 10px',

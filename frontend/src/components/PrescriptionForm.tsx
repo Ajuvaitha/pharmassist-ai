@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Prescription, FoodTiming, MedRoute, TimeOfDay } from '../types';
+import { FREQUENCIES, type Frequency } from '@pharmassist/shared';
 
 interface PrescriptionFormProps {
   initial?: Partial<Prescription>;
@@ -8,7 +9,11 @@ interface PrescriptionFormProps {
   onCancel: () => void;
 }
 
-const FREQUENCIES = ['OD', 'BD', 'TDS', 'QDS', 'ON', 'PRN', 'STAT', 'Weekly'];
+/** Derives a stable drug id from its label, matching the scheme used across mock data. */
+function slugifyDrug(label: string): string {
+  return `d-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+}
+
 const ROUTES: MedRoute[] = ['Oral', 'IV', 'IM', 'SC', 'Topical', 'Inhaled'];
 const FOOD_TIMINGS: { value: FoodTiming; label: string }[] = [
   { value: 'before-food', label: 'Before food' },
@@ -27,7 +32,7 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
   const [drug, setDrug] = useState(initial?.drug ?? '');
   const [dose, setDose] = useState(initial?.dose ?? '');
   const [route, setRoute] = useState<MedRoute>(initial?.route ?? 'Oral');
-  const [frequency, setFrequency] = useState(initial?.frequency ?? 'OD');
+  const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? 'OD');
   const [foodTiming, setFoodTiming] = useState<FoodTiming>(initial?.foodTiming ?? 'not-applicable');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay[]>(initial?.timeOfDay ?? ['morning']);
   const [durationDays, setDurationDays] = useState(initial?.durationDays?.toString() ?? '7');
@@ -44,6 +49,7 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
     e.preventDefault();
     if (!drug.trim() || !dose.trim()) return;
     onSave({
+      drugId: initial?.drugId ?? slugifyDrug(drug.trim()),
       drug: drug.trim(),
       dose: dose.trim(),
       route,
@@ -92,7 +98,7 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
         </div>
         <div>
           <label style={lbl}>Frequency</label>
-          <select value={frequency} onChange={e => setFrequency(e.target.value)} style={inp}>
+          <select value={frequency} onChange={e => setFrequency(e.target.value as Frequency)} style={inp}>
             {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
           </select>
         </div>

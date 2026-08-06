@@ -34,6 +34,14 @@ export default defineConfig(({ mode }) => {
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
       watch: { ignored: ['**/.figma/**'] },
+      proxy: {
+        // Same-origin in development, so the session cookie is a
+        // first-party cookie and no CORS or CSRF token is needed.
+        '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: false,
+        },
+      },
     },
     preview: {
       host: '0.0.0.0',

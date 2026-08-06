@@ -195,3 +195,53 @@ describe('requireRole', () => {
     expect(response.json().error).toBe('AUTH_EXPIRED')
   })
 })
+
+describe('app.guard', () => {
+  const guardedRoute: FastifyPluginAsync = async (instance) => {
+    instance.get('/api/pharmacist-only', { preHandler: instance.guard('pharmacist') }, async () => ({ ok: true }))
+    instance.get('/api/any-signed-in', { preHandler: instance.guard() }, async () => ({ ok: true }))
+  }
+
+  async function loginOn(instance: FastifyInstance, username: string) {
+    const res = await instance.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username, password: 'pharmassist' },
+    })
+    const cookie = res.cookies[0]
+    return { [cookie.name]: cookie.value }
+  }
+
+  it('allows a permitted role', async () => {
+    const app2 = await buildTestApp(guardedRoute)
+    const cookies = await loginOn(app2, 'k.asante')
+    const res = await app2.inject({ method: 'GET', url: '/api/pharmacist-only', cookies })
+    await app2.close()
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('denies a role not on the list with FORBIDDEN', async () => {
+    const app2 = await buildTestApp(guardedRoute)
+    const cookies = await loginOn(app2, 'a.owusu')
+    const res = await app2.inject({ method: 'GET', url: '/api/pharmacist-only', cookies })
+    await app2.close()
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toBe('FORBIDDEN')
+  })
+
+  it('requires authentication even with no roles listed', async () => {
+    const app2 = await buildTestApp(guardedRoute)
+    const res = await app2.inject({ method: 'GET', url: '/api/any-signed-in' })
+    await app2.close()
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error).toBe('AUTH_EXPIRED')
+  })
+
+  it('admits any signed-in role when no roles are listed', async () => {
+    const app2 = await buildTestApp(guardedRoute)
+    const cookies = await loginOn(app2, 'b.kwame')
+    const res = await app2.inject({ method: 'GET', url: '/api/any-signed-in', cookies })
+    await app2.close()
+    expect(res.statusCode).toBe(200)
+  })
+})

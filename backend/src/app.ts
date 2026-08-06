@@ -5,6 +5,7 @@ import authPlugin from './plugins/auth'
 import errorsPlugin from './plugins/errors'
 import prismaPlugin from './plugins/prisma'
 import authRoutes from './modules/auth/routes'
+import healthRoutes from './modules/health/routes'
 
 export interface BuildAppOptions {
   /** Supplied by tests to pin the app to the test database. */
@@ -22,11 +23,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(prismaPlugin, { prisma: options.prisma })
   await app.register(authPlugin)
 
-  app.get('/api/health', async () => {
-    await app.prisma.$queryRaw`SELECT 1`
-    return { status: 'ok', database: 'up' }
-  })
-
+  await app.register(healthRoutes)
   await app.register(authRoutes)
 
   return app

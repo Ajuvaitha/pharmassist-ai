@@ -30,6 +30,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     authenticate: preHandlerHookHandler
     requireRole: (...roles: Role[]) => preHandlerHookHandler
+    guard: (...roles: Role[]) => preHandlerHookHandler[]
     issueSession: (reply: FastifyReply, user: SessionUser) => Promise<void>
     clearSession: (reply: FastifyReply) => void
   }
@@ -119,6 +120,17 @@ const authPlugin: FastifyPluginAsync = async (app) => {
         )
       }
     }
+  })
+
+  /**
+   * The only sanctioned way to protect a route. Composing the pair by hand
+   * makes it possible to attach requireRole without authenticate, which
+   * denies with a 500 rather than a 403.
+   */
+  app.decorate('guard', (...roles: Role[]): preHandlerHookHandler[] => {
+    return roles.length === 0
+      ? [app.authenticate]
+      : [app.authenticate, app.requireRole(...roles)]
   })
 }
 

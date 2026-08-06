@@ -8,6 +8,8 @@ import authRoutes from './modules/auth/routes'
 import healthRoutes from './modules/health/routes'
 import wardRoutes from './modules/wards/routes'
 import patientRoutes from './modules/patients/routes'
+import drugRoutes from './modules/drugs/routes'
+import prescriptionRoutes from './modules/prescriptions/routes'
 
 export interface BuildAppOptions {
   /** Supplied by tests to pin the app to the test database. */
@@ -29,6 +31,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(authRoutes)
   await app.register(wardRoutes)
   await app.register(patientRoutes)
+  await app.register(drugRoutes)
+  await app.register(prescriptionRoutes)
 
   return app
 }

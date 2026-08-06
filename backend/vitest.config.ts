@@ -6,5 +6,8 @@ export default defineConfig({
     // Service tests share one Postgres database and truncate between
     // tests, so they must not run concurrently.
     fileParallelism: false,
+    env: {
+      NODE_ENV: 'test',
+    },
   },
 })

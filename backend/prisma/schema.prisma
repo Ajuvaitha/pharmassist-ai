@@ -1,0 +1,309 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  pharmacist
+  nurse
+  doctor
+}
+
+enum Gender {
+  Male
+  Female
+  Other
+}
+
+enum PatientStatus {
+  admitted
+  discharged
+}
+
+enum MedRoute {
+  Oral
+  IV
+  IM
+  SC
+  Topical
+  Inhaled
+}
+
+// Eight prescribing codes. The first five are swept daily; Weekly is
+// swept only on its due day; PRN (as needed) and STAT (immediate,
+// one-off) are never auto-indented and are dispensed ad hoc.
+enum Frequency {
+  OD
+  BD
+  TDS
+  QDS
+  ON
+  Weekly
+  PRN
+  STAT
+}
+
+// @map keeps the hyphenated wire format the UI already uses.
+enum FoodTiming {
+  before_food    @map("before-food")
+  after_food     @map("after-food")
+  with_food      @map("with-food")
+  not_applicable @map("not-applicable")
+}
+
+enum TimeOfDay {
+  morning
+  afternoon
+  evening
+  night
+}
+
+enum PrescriptionStatus {
+  active
+  stopped
+  completed
+}
+
+enum IndentStatus {
+  pending
+  swept
+  dispensed
+}
+
+enum IndentLineStatus {
+  pending
+  dispensed
+  cancelled
+}
+
+enum BillingStatus {
+  pending
+  billed
+  voided
+}
+
+enum StockReason {
+  dispense
+  restock
+  adjustment
+}
+
+enum ActivityType {
+  dispense
+  prescription
+  stop
+  restock
+  register
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  displayName  String
+  role         Role
+  wardId       String?
+  ward         Ward?    @relation(fields: [wardId], references: [id])
+  createdAt    DateTime @default(now())
+
+  prescriptionsWritten Prescription[]  @relation("PrescribedBy")
+  prescriptionsStopped Prescription[]  @relation("StoppedBy")
+  indentLinesDispensed IndentLine[]
+  billingLinesBilled   BillingLine[]
+  stockMovements       StockMovement[]
+  activityEvents       ActivityEvent[]
+
+  @@index([wardId])
+}
+
+model Ward {
+  id   String @id @default(cuid())
+  code String @unique
+  name String
+
+  users          User[]
+  patients       Patient[]
+  indents        DailyIndent[]
+  billingLines   BillingLine[]
+  activityEvents ActivityEvent[]
+}
+
+model Patient {
+  id            String        @id @default(cuid())
+  mrn           String        @unique
+  name          String
+  dateOfBirth   DateTime      @db.Date
+  gender        Gender
+  phone         String
+  wardId        String
+  ward          Ward          @relation(fields: [wardId], references: [id])
+  bed           String
+  admissionDate DateTime      @db.Date
+  diagnosis     String
+  allergies     String
+  status        PatientStatus @default(admitted)
+  createdAt     DateTime      @default(now())
+
+  prescriptions  Prescription[]
+  indentLines    IndentLine[]
+  billingLines   BillingLine[]
+  activityEvents ActivityEvent[]
+
+  @@index([wardId, status])
+}
+
+model Drug {
+  id        String  @id @default(cuid())
+  label     String  @unique
+  name      String
+  strength  String
+  form      String
+  category  String
+  unitPrice Decimal @db.Decimal(10, 2)
+
+  inventoryItem  InventoryItem?
+  prescriptions  Prescription[]
+  indentLines    IndentLine[]
+  billingLines   BillingLine[]
+  stockMovements StockMovement[]
+  activityEvents ActivityEvent[]
+}
+
+model InventoryItem {
+  id           String   @id @default(cuid())
+  drugId       String   @unique
+  drug         Drug     @relation(fields: [drugId], references: [id])
+  currentStock Int
+  reorderLevel Int
+  updatedAt    DateTime @updatedAt
+}
+
+model StockMovement {
+  id           String      @id @default(cuid())
+  drugId       String
+  drug         Drug        @relation(fields: [drugId], references: [id])
+  delta        Int
+  reason       StockReason
+  ref          String?
+  actorId      String?
+  actor        User?       @relation(fields: [actorId], references: [id])
+  indentLineId String?
+  createdAt    DateTime    @default(now())
+
+  @@index([drugId, createdAt])
+}
+
+model Prescription {
+  id             String             @id @default(cuid())
+  patientId      String
+  patient        Patient            @relation(fields: [patientId], references: [id])
+  drugId         String
+  drug           Drug               @relation(fields: [drugId], references: [id])
+  dose           String
+  route          MedRoute
+  frequency      Frequency
+  foodTiming     FoodTiming
+  timeOfDay      TimeOfDay[]
+  startDate      DateTime           @db.Date
+  durationDays   Int
+  status         PrescriptionStatus @default(active)
+  stopReason     String?
+  notes          String?
+  prescribedById String
+  prescribedBy   User               @relation("PrescribedBy", fields: [prescribedById], references: [id])
+  prescribedAt   DateTime           @default(now())
+  stoppedById    String?
+  stoppedBy      User?              @relation("StoppedBy", fields: [stoppedById], references: [id])
+  stoppedAt      DateTime?
+
+  indentLines IndentLine[]
+
+  @@index([patientId, status])
+  @@index([status, startDate])
+}
+
+model DailyIndent {
+  id          String       @id @default(cuid())
+  wardId      String
+  ward        Ward         @relation(fields: [wardId], references: [id])
+  indentDate  DateTime     @db.Date
+  status      IndentStatus @default(pending)
+  generatedAt DateTime     @default(now())
+
+  lines IndentLine[]
+
+  // Makes the 06:00 sweep idempotent: a re-run cannot create a second
+  // indent for the same ward and day.
+  @@unique([wardId, indentDate])
+}
+
+model IndentLine {
+  id             String           @id @default(cuid())
+  indentId       String
+  indent         DailyIndent      @relation(fields: [indentId], references: [id], onDelete: Cascade)
+  patientId      String
+  patient        Patient          @relation(fields: [patientId], references: [id])
+  prescriptionId String
+  prescription   Prescription     @relation(fields: [prescriptionId], references: [id])
+  drugId         String
+  drug           Drug             @relation(fields: [drugId], references: [id])
+  qty            Int
+  treatmentDay   Int
+  status         IndentLineStatus @default(pending)
+  dispensedById  String?
+  dispensedBy    User?            @relation(fields: [dispensedById], references: [id])
+  dispensedAt    DateTime?
+
+  billingLine BillingLine?
+
+  // Line-level idempotency for the sweep.
+  @@unique([indentId, prescriptionId])
+  @@index([patientId, status])
+}
+
+model BillingLine {
+  id           String        @id @default(cuid())
+  indentLineId String        @unique
+  indentLine   IndentLine    @relation(fields: [indentLineId], references: [id])
+  patientId    String
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  wardId       String
+  ward         Ward          @relation(fields: [wardId], references: [id])
+  drugId       String
+  drug         Drug          @relation(fields: [drugId], references: [id])
+  qty          Int
+  // Snapshotted at dispense time so a later catalog price change cannot
+  // rewrite billed history.
+  unitPrice    Decimal       @db.Decimal(10, 2)
+  total        Decimal       @db.Decimal(10, 2)
+  status       BillingStatus @default(pending)
+  billedById   String?
+  billedBy     User?         @relation(fields: [billedById], references: [id])
+  billedAt     DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([patientId, status])
+  @@index([wardId, createdAt])
+}
+
+model ActivityEvent {
+  id         String       @id @default(cuid())
+  type       ActivityType
+  patientId  String?
+  patient    Patient?     @relation(fields: [patientId], references: [id])
+  wardId     String?
+  ward       Ward?        @relation(fields: [wardId], references: [id])
+  drugId     String?
+  drug       Drug?        @relation(fields: [drugId], references: [id])
+  text       String
+  actorId    String?
+  actor      User?        @relation(fields: [actorId], references: [id])
+  occurredAt DateTime     @default(now())
+
+  @@index([occurredAt])
+  @@index([type, occurredAt])
+}

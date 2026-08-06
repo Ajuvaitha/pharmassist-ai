@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pharmassist-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pharmassist
+      POSTGRES_PASSWORD: pharmassist
+      POSTGRES_DB: pharmassist
+    ports:
+      - '5433:5432'
+    volumes:
+      - pharmassist-db-data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pharmassist -d pharmassist']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pharmassist-db-data:

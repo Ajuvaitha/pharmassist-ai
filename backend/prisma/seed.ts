@@ -1,26 +1,7 @@
-import { FoodTiming, PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import { hash } from '@node-rs/argon2'
+import { toFoodTimingEnum } from '../src/domain/enums'
 import { DRUGS, INVENTORY, PATIENTS, SEED_PASSWORD, USERS, WARDS } from './seed-data'
-
-/**
- * seed-data.ts carries FoodTiming in the hyphenated wire format the UI
- * uses ('after-food'). The schema's FoodTiming enum @maps its members to
- * that same string for the database column, but the generated Prisma
- * Client is keyed by the underscored member name ('after_food') — so the
- * hyphenated string must be translated before it reaches the client.
- */
-const FOOD_TIMING_BY_WIRE_VALUE: Record<string, FoodTiming> = {
-  'before-food': FoodTiming.before_food,
-  'after-food': FoodTiming.after_food,
-  'with-food': FoodTiming.with_food,
-  'not-applicable': FoodTiming.not_applicable,
-}
-
-function toFoodTimingEnum(value: string): FoodTiming {
-  const mapped = FOOD_TIMING_BY_WIRE_VALUE[value]
-  if (!mapped) throw new Error(`Unknown foodTiming wire value: ${value}`)
-  return mapped
-}
 
 /**
  * Idempotent: every write is an upsert keyed on a natural unique column,
@@ -28,6 +9,10 @@ function toFoodTimingEnum(value: string): FoodTiming {
  * duplicate-key crash.
  */
 export async function seed(prisma: PrismaClient): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to seed a production database')
+  }
+
   for (const ward of WARDS) {
     await prisma.ward.upsert({
       where: { code: ward.code },
@@ -146,10 +131,6 @@ export async function seed(prisma: PrismaClient): Promise<void> {
 
 // Entrypoint for `pnpm --filter @pharmassist/backend seed`.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Refusing to seed a production database')
-  }
-
   const prisma = new PrismaClient()
   await seed(prisma)
   await prisma.$disconnect()

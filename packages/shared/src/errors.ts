@@ -8,6 +8,7 @@ export const ErrorCode = {
   INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
   ALREADY_BILLED: 'ALREADY_BILLED',
   DATABASE_ERROR: 'DATABASE_ERROR',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]

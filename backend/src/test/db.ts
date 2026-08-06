@@ -10,6 +10,9 @@ let client: PrismaClient | undefined
 export function getTestPrisma(): PrismaClient {
   if (!client) {
     const env = loadEnv()
+    if (!env.TEST_DATABASE_URL) {
+      throw new Error('TEST_DATABASE_URL is required to run tests')
+    }
     client = new PrismaClient({ datasources: { db: { url: env.TEST_DATABASE_URL } } })
   }
   return client

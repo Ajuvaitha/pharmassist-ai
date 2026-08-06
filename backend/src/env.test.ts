@@ -30,4 +30,15 @@ describe('loadEnv', () => {
     const { DATABASE_URL: _omitted, ...rest } = valid
     expect(() => loadEnv(rest)).toThrow(/DATABASE_URL/)
   })
+
+  it('requires TEST_DATABASE_URL when NODE_ENV is test', () => {
+    const { TEST_DATABASE_URL: _omitted, ...rest } = valid
+    expect(() => loadEnv({ ...rest, NODE_ENV: 'test' })).toThrow(/TEST_DATABASE_URL/)
+  })
+
+  it('does not require TEST_DATABASE_URL when NODE_ENV is production', () => {
+    const { TEST_DATABASE_URL: _omitted, ...rest } = valid
+    const env = loadEnv({ ...rest, NODE_ENV: 'production' })
+    expect(env.TEST_DATABASE_URL).toBeUndefined()
+  })
 })

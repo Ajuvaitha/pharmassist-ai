@@ -54,7 +54,7 @@ describe('error envelope', () => {
     })
   })
 
-  it('hides the detail of an unexpected error behind DATABASE_ERROR', async () => {
+  it('hides the detail of an unexpected error behind INTERNAL_ERROR', async () => {
     const withExplode = await buildTestApp(async (instance) => {
       instance.get('/api/explode', async () => {
         throw new Error('connection string leaked postgres://user:hunter2@host')
@@ -65,7 +65,7 @@ describe('error envelope', () => {
     await withExplode.close()
 
     expect(response.statusCode).toBe(500)
-    expect(response.json().error).toBe('DATABASE_ERROR')
+    expect(response.json().error).toBe('INTERNAL_ERROR')
     expect(response.json().message).not.toContain('hunter2')
   })
 })

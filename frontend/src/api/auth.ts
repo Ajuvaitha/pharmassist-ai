@@ -41,7 +41,6 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => apiPost<{ success: true }>('/api/auth/logout'),
     onSuccess: () => {
-      client.setQueryData(meQueryKey, null)
       // Drop every cached query — the next user must not see the previous
       // user's patients.
       client.clear()

@@ -63,7 +63,7 @@ describe('apiGet', () => {
     expect(error).toBeInstanceOf(ApiError)
     if (!(error instanceof ApiError)) throw error
     expect(error.status).toBe(502)
-    expect(error.code).toBe('DATABASE_ERROR')
+    expect(error.code).toBe('INTERNAL_ERROR')
   })
 })
 

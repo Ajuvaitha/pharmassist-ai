@@ -43,7 +43,7 @@ const errorsPlugin: FastifyPluginAsync = async (app) => {
     request.log.error({ err: error }, 'Unhandled error')
     reply
       .status(500)
-      .send(envelope(ErrorCode.DATABASE_ERROR, 'An internal error occurred'))
+      .send(envelope(ErrorCode.INTERNAL_ERROR, 'An internal error occurred'))
   })
 }
 

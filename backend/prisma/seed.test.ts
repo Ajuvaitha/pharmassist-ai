@@ -56,6 +56,17 @@ describe('seed', () => {
     expect(user.passwordHash.startsWith('$argon2')).toBe(true)
   })
 
+  it('refuses to run against a production environment', async () => {
+    const original = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+      await expect(seed(prisma)).rejects.toThrow(/production/)
+    } finally {
+      process.env.NODE_ENV = original
+    }
+  })
+
   it('scopes nurses to a ward and leaves other roles unscoped', async () => {
     await seed(prisma)
 

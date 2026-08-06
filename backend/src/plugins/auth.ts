@@ -10,6 +10,22 @@ import { getSessionUser } from '../modules/auth/service'
 export const SESSION_COOKIE = 'pharmassist_session'
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12
 
+/**
+ * Narrows request.user from SessionUser | null to SessionUser, so route
+ * handlers registered behind the `authenticate` preHandler don't each
+ * have to null-check (or reach for a `!`) before using it. Throws the
+ * same error `authenticate` itself throws when a session is missing —
+ * this should only ever be reached if a route uses requireUser without
+ * the preHandler, which is itself a bug worth surfacing as AUTH_EXPIRED
+ * rather than a crash.
+ */
+export function requireUser(request: FastifyRequest): SessionUser {
+  if (!request.user) {
+    throw AppError.authExpired()
+  }
+  return request.user
+}
+
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: preHandlerHookHandler
@@ -78,6 +94,12 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       request.log.debug({ err }, 'JWT verification failed')
       throw AppError.authExpired()
     }
+
+    // @fastify/jwt assigns the raw { sub } payload to request.user inside
+    // jwtVerify() above. Overwrite it explicitly before the lookup below
+    // so a future try/catch around that call can never leave request.user
+    // holding the raw claim bag while its declared type says SessionUser.
+    request.user = null
 
     // Re-read the user each request so a role or ward change takes effect
     // without waiting for the token to expire.

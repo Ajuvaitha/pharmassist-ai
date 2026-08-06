@@ -23,10 +23,12 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
 
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   const response = await fetch(path, {
-    // The session lives in an httpOnly cookie, so every request must
-    // carry credentials or the server sees an anonymous caller.
-    credentials: 'include',
     ...init,
+    // The session lives in an httpOnly cookie, so every request must
+    // carry credentials or the server sees an anonymous caller. This is
+    // deliberately last so a caller-supplied init.credentials cannot
+    // override it and silently drop the cookie.
+    credentials: 'include',
   })
 
   if (response.status === 204) {
@@ -50,7 +52,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     }
     // A proxy error or an HTML error page — not our envelope.
     throw new ApiError(
-      ErrorCode.DATABASE_ERROR,
+      ErrorCode.INTERNAL_ERROR,
       `Request failed with status ${response.status}`,
       response.status,
     )

@@ -4,6 +4,7 @@ import { loadEnv } from './env'
 import authPlugin from './plugins/auth'
 import errorsPlugin from './plugins/errors'
 import prismaPlugin from './plugins/prisma'
+import securityPlugin from './plugins/security'
 import authRoutes from './modules/auth/routes'
 import healthRoutes from './modules/health/routes'
 import wardRoutes from './modules/wards/routes'
@@ -28,6 +29,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   })
 
   await app.register(errorsPlugin)
+  await app.register(securityPlugin)
   await app.register(prismaPlugin, { prisma: options.prisma })
   await app.register(authPlugin)
 

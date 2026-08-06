@@ -41,4 +41,18 @@ describe('loadEnv', () => {
     const env = loadEnv({ ...rest, NODE_ENV: 'production' })
     expect(env.TEST_DATABASE_URL).toBeUndefined()
   })
+
+  it('leaves CORS_ORIGIN unset by default', () => {
+    const env = loadEnv(valid)
+    expect(env.CORS_ORIGIN).toBeUndefined()
+  })
+
+  it('accepts a configured CORS_ORIGIN', () => {
+    const env = loadEnv({ ...valid, CORS_ORIGIN: 'https://pharmassist.example.org' })
+    expect(env.CORS_ORIGIN).toBe('https://pharmassist.example.org')
+  })
+
+  it('rejects a CORS_ORIGIN of "*"', () => {
+    expect(() => loadEnv({ ...valid, CORS_ORIGIN: '*' })).toThrow(/CORS_ORIGIN/)
+  })
 })

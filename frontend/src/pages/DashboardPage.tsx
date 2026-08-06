@@ -9,7 +9,7 @@ interface DashboardPageProps {
   patients: Patient[];
 }
 
-type DrillKey = 'patients' | 'prescriptions' | 'pickups' | 'lowstock' | null;
+type DrillKey = 'patients-rx' | 'pickups' | 'lowstock' | null;
 
 const FOOD_LABEL: Record<string, string> = {
   'before-food': 'Before food', 'after-food': 'After food',
@@ -29,24 +29,38 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
     role === 'nurse' ? p.ward.includes(ward.split(' — ')[0]) : true
   );
 
-  const allActivePrescriptions = patients.flatMap(p =>
-    p.prescriptions.filter(rx => rx.status === 'active').map(rx => ({ ...rx, patientName: p.name, patientId: p.id, ward: p.ward, bed: p.bed }))
+  const totalActiveRx = activePatients.reduce(
+    (s, p) => s + p.prescriptions.filter(rx => rx.status === 'active').length, 0
   );
-
-  // Group active prescriptions by patient
-  const rxByPatient = activePatients.map(p => ({
-    patient: p,
-    prescriptions: p.prescriptions.filter(rx => rx.status === 'active'),
-  })).filter(g => g.prescriptions.length > 0);
 
   const pendingPickups = TRANSACTIONS.filter(t => t.status === 'pending');
   const lowStockItems = INVENTORY.filter(i => i.status === 'low' || i.status === 'critical');
 
   const metrics = [
-    { key: 'patients' as DrillKey, label: 'Active Patients', value: activePatients.length, sub: 'across all wards', valueColor: '#0F172A' },
-    { key: 'prescriptions' as DrillKey, label: 'Active Prescriptions', value: allActivePrescriptions.length, sub: 'across all patients', valueColor: '#0F172A' },
-    { key: 'pickups' as DrillKey, label: 'Pending Pickups', value: pendingPickups.length, sub: 'awaiting billing', valueColor: '#D97706' },
-    { key: 'lowstock' as DrillKey, label: 'Low-Stock Alerts', value: lowStockItems.length, sub: 'at or below reorder level', valueColor: '#DC2626' },
+    {
+      key: 'patients-rx' as DrillKey,
+      label: 'Patients & Prescriptions',
+      value: activePatients.length,
+      sub: `${totalActiveRx} active prescriptions across all patients`,
+      valueColor: '#0F172A',
+      subValue: totalActiveRx,
+    },
+    {
+      key: 'pickups' as DrillKey,
+      label: 'Pending Pickups',
+      value: pendingPickups.length,
+      sub: 'awaiting billing',
+      valueColor: '#D97706',
+      subValue: null,
+    },
+    {
+      key: 'lowstock' as DrillKey,
+      label: 'Low-Stock Alerts',
+      value: lowStockItems.length,
+      sub: 'at or below reorder level',
+      valueColor: '#DC2626',
+      subValue: null,
+    },
   ];
 
   const filteredWards = visibleWards.filter(w =>
@@ -62,8 +76,8 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
         <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>Wednesday, 5 August 2026</p>
       </div>
 
-      {/* Metric cards — no active border styling */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      {/* Metric cards — 3 cards, first one wider */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 12 }}>
         {metrics.map(card => (
           <button
             key={card.key}
@@ -81,11 +95,32 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
             onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(27,34,44,0.08)')}
             onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
           >
-            <div style={{ fontSize: 30, fontWeight: 700, color: card.valueColor, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-              {card.value}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', marginTop: 6 }}>{card.label}</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{card.sub}</div>
+            {/* Combined card: two numbers side-by-side */}
+            {card.key === 'patients-rx' ? (
+              <div style={{ display: 'flex', gap: 20, marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 30, fontWeight: 700, color: '#0F172A', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    {activePatients.length}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Patients</div>
+                </div>
+                <div style={{ width: 1, background: '#D9E8EF', alignSelf: 'stretch' }} />
+                <div>
+                  <div style={{ fontSize: 30, fontWeight: 700, color: '#0AADA8', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    {totalActiveRx}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Active Prescriptions</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 30, fontWeight: 700, color: card.valueColor, fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginBottom: 6 }}>
+                {card.value}
+              </div>
+            )}
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{card.label}</div>
+            {card.key !== 'patients-rx' && (
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{card.sub}</div>
+            )}
             <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8 }}>
               {drill === card.key ? '▲ collapse' : '▼ view details'}
             </div>
@@ -93,7 +128,7 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
         ))}
       </div>
 
-      {/* Drill-down panel — no teal border */}
+      {/* Drill-down panel */}
       {drill && (
         <div style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, overflow: 'hidden' }}>
           <div style={{
@@ -103,79 +138,69 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
             <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {metrics.find(m => m.key === drill)?.label}
             </span>
-            <button onClick={() => setDrill(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+            <button onClick={() => { setDrill(null); setExpandedPatient(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
           </div>
 
-          {/* Active Patients */}
-          {drill === 'patients' && (
+          {/* Combined: Patients list, each expandable to show prescriptions */}
+          {drill === 'patients-rx' && (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 100px 80px 120px 60px', padding: '9px 20px', background: '#FAFBFC', borderBottom: '1px solid #D9E8EF' }}>
-                {['Name', 'MRN', 'Ward', 'Bed', 'Admitted', 'Rx'].map((h, i) => (
-                  <span key={h} style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i === 5 ? 'right' : 'left' }}>{h}</span>
+              {/* Header row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 110px 110px 36px', padding: '9px 20px', background: '#FAFBFC', borderBottom: '1px solid #D9E8EF' }}>
+                {['Patient', 'MRN', 'Ward', 'Admitted', 'Rx'].map((h, i) => (
+                  <span key={h} style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i === 4 ? 'right' : 'left' }}>{h}</span>
                 ))}
               </div>
-              {activePatients.map((p, i) => (
-                <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 100px 80px 120px 60px', padding: '11px 20px', borderBottom: i < activePatients.length - 1 ? '1px solid #D9E8EF' : 'none', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>{p.name}</div>
-                    {p.allergies && p.allergies !== 'None known' && (
-                      <span style={{ fontSize: 10, color: '#DC2626', background: '#FEE2E2', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>ALLERGY</span>
-                    )}
-                  </div>
-                  <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{p.mrn}</span>
-                  <span style={{ fontSize: 13, color: '#64748B' }}>{p.ward}</span>
-                  <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{p.bed}</span>
-                  <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{p.admissionDate}</span>
-                  <span style={{ fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', color: '#0F172A', textAlign: 'right' }}>
-                    {p.prescriptions.filter(rx => rx.status === 'active').length}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Active Prescriptions — grouped by patient */}
-          {drill === 'prescriptions' && (
-            <div>
-              {rxByPatient.map((group, gi) => {
-                const isOpen = expandedPatient === group.patient.id;
+              {activePatients.map((p, i) => {
+                const activeRx = p.prescriptions.filter(rx => rx.status === 'active');
+                const isOpen = expandedPatient === p.id;
                 return (
-                  <div key={group.patient.id} style={{ borderBottom: gi < rxByPatient.length - 1 ? '1px solid #D9E8EF' : 'none' }}>
+                  <div key={p.id} style={{ borderBottom: i < activePatients.length - 1 ? '1px solid #D9E8EF' : 'none' }}>
+                    {/* Patient row — click anywhere to toggle */}
                     <button
-                      onClick={() => setExpandedPatient(isOpen ? null : group.patient.id)}
+                      onClick={() => setExpandedPatient(isOpen ? null : p.id)}
                       style={{
-                        display: 'grid', gridTemplateColumns: '1fr 100px 80px 40px',
+                        display: 'grid', gridTemplateColumns: '1fr 160px 110px 110px 36px',
                         width: '100%', padding: '12px 20px',
                         border: 'none', background: isOpen ? '#F0F9FB' : 'transparent',
                         cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                         alignItems: 'center', transition: 'background 0.1s',
                       }}
                     >
-                      <div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{group.patient.name}</span>
-                        <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>{group.patient.ward} · {group.patient.bed}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{p.name}</div>
+                        {p.allergies && p.allergies !== 'None known' && (
+                          <span style={{ fontSize: 10, color: '#DC2626', background: '#FEE2E2', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>ALLERGY</span>
+                        )}
                       </div>
-                      <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{group.patient.mrn}</span>
-                      <span style={{
-                        fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
-                        background: '#DBEAFE', color: '#2563EB',
-                        padding: '2px 8px', borderRadius: 4, fontWeight: 600,
-                        display: 'inline-block',
-                      }}>
-                        {group.prescriptions.length} Rx
-                      </span>
-                      <span style={{ color: '#64748B', fontSize: 11, textAlign: 'right' }}>{isOpen ? '▲' : '▼'}</span>
+                      <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{p.mrn}</span>
+                      <span style={{ fontSize: 12, color: '#64748B' }}>{p.ward}</span>
+                      <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{p.admissionDate}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                        <span style={{
+                          fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+                          background: activeRx.length > 0 ? '#DBEAFE' : '#F0F9FB',
+                          color: activeRx.length > 0 ? '#2563EB' : '#94A3B8',
+                          padding: '2px 7px', borderRadius: 4, fontWeight: 600,
+                        }}>
+                          {activeRx.length}
+                        </span>
+                        <span style={{ color: '#94A3B8', fontSize: 10 }}>{isOpen ? '▲' : '▼'}</span>
+                      </div>
                     </button>
 
-                    {isOpen && (
-                      <div style={{ background: '#F0F9FB', padding: '0 20px 12px 40px', borderTop: '1px solid #D9E8EF' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px 120px 120px', padding: '8px 0 6px' }}>
+                    {/* Prescription dropdown */}
+                    {isOpen && activeRx.length > 0 && (
+                      <div style={{ background: '#F8FBFC', padding: '4px 20px 14px 40px', borderTop: '1px solid #D9E8EF' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 120px 120px', padding: '8px 0 6px' }}>
                           {['Drug', 'Dose', 'Freq.', 'Food Timing', 'Time of Day'].map(h => (
-                            <span key={h} style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{h}</span>
+                            <span key={h} style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</span>
                           ))}
                         </div>
-                        {group.prescriptions.map((rx, ri) => (
-                          <div key={rx.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px 120px 120px', padding: '8px 0', borderTop: ri > 0 ? '1px solid #D9E8EF' : 'none', alignItems: 'center' }}>
+                        {activeRx.map((rx, ri) => (
+                          <div key={rx.id} style={{
+                            display: 'grid', gridTemplateColumns: '1fr 80px 60px 120px 120px',
+                            padding: '9px 0', borderTop: ri > 0 ? '1px solid #D9E8EF' : 'none', alignItems: 'center',
+                          }}>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>{rx.drug}</div>
                               <div style={{ fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', color: '#94A3B8' }}>{rx.route}</div>
@@ -186,6 +211,11 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
                             <span style={{ fontSize: 12, color: '#64748B' }}>{rx.timeOfDay.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(', ')}</span>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {isOpen && activeRx.length === 0 && (
+                      <div style={{ padding: '10px 20px 14px 40px', fontSize: 12, color: '#94A3B8', borderTop: '1px solid #D9E8EF', background: '#F8FBFC' }}>
+                        No active prescriptions.
                       </div>
                     )}
                   </div>
@@ -261,43 +291,24 @@ export default function DashboardPage({ role, ward, patients }: DashboardPagePro
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             {filteredWards.map(w => {
               const wardPatients = patients.filter(p => p.ward.includes(w.name.split(' — ')[0]));
-              const pendingRx = wardPatients.reduce((s, p) => s + p.prescriptions.filter(rx => rx.status === 'active').length, 0);
-              const statusCounts = {
-                pending: w.sweepStatus === 'pending' ? w.activePatients : 0,
-                swept: w.sweepStatus === 'swept' ? w.activePatients : 0,
-                dispensed: w.sweepStatus === 'dispensed' ? w.activePatients : 0,
-              };
-
-              const statusColor = w.sweepStatus === 'dispensed' ? '#16A34A'
-                : w.sweepStatus === 'swept' ? '#D97706'
-                : '#64748B';
-              const statusBg = w.sweepStatus === 'dispensed' ? '#DCFCE7'
-                : w.sweepStatus === 'swept' ? '#FEF3C7'
-                : '#F0F9FB';
+              const totalPts = wardPatients.length;
+              const dispensedPts = w.sweepStatus === 'dispensed' ? totalPts : 0;
+              const pendingPts = totalPts - dispensedPts;
 
               return (
                 <div key={w.id} style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, padding: '16px 20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{w.name.split(' — ')[0]}</div>
-                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{w.name.split(' — ')[1]}</div>
-                    </div>
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, padding: '3px 10px',
-                      borderRadius: 4, background: statusBg, color: statusColor,
-                      textTransform: 'capitalize',
-                    }}>
-                      {w.sweepStatus}
-                    </span>
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{w.name.split(' — ')[0]}</div>
+                    <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{w.name.split(' — ')[1]}</div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                     {[
-                      { label: 'Patients', value: w.activePatients, color: '#0F172A' },
-                      { label: 'Active Rx', value: pendingRx, color: '#2563EB' },
-                      { label: 'Dispensed', value: w.sweepStatus === 'dispensed' ? w.activePatients : 0, color: '#16A34A' },
+                      { label: 'Total Patients', value: totalPts, color: '#0F172A', bg: '#F0F9FB' },
+                      { label: 'Pending', value: pendingPts, color: '#D97706', bg: '#FEF3C7' },
+                      { label: 'Dispensed', value: dispensedPts, color: '#16A34A', bg: '#DCFCE7' },
                     ].map(stat => (
-                      <div key={stat.label} style={{ background: '#F0F9FB', borderRadius: 6, padding: '10px 12px' }}>
+                      <div key={stat.label} style={{ background: stat.bg, borderRadius: 6, padding: '10px 12px' }}>
                         <div style={{ fontSize: 20, fontWeight: 700, color: stat.color, fontVariantNumeric: 'tabular-nums' }}>{stat.value}</div>
                         <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{stat.label}</div>
                       </div>

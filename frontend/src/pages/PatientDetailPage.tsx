@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import type { Patient, Prescription } from '../types';
+import type { Patient } from '../types';
 import StatusPill from '../components/StatusPill';
 
 interface PatientDetailPageProps {
@@ -8,15 +7,6 @@ interface PatientDetailPageProps {
   onStopPrescription: (patientId: string, rxId: string, reason: string) => void;
 }
 
-const STOP_REASONS = [
-  'Treatment complete',
-  'Adverse reaction',
-  'Toxicity suspected',
-  'Switched to alternative',
-  'Patient refusal',
-  'Clinical decision',
-];
-
 const FOOD_LABEL: Record<string, string> = {
   'before-food': 'Before food',
   'after-food': 'After food',
@@ -24,21 +14,20 @@ const FOOD_LABEL: Record<string, string> = {
   'not-applicable': '—',
 };
 
-export default function PatientDetailPage({ patient, onBack, onStopPrescription }: PatientDetailPageProps) {
-  const [stoppingRx, setStoppingRx] = useState<Prescription | null>(null);
-  const [stopReason, setStopReason] = useState(STOP_REASONS[0]);
-  const [stopNotes, setStopNotes] = useState('');
+function calcAge(dob: string): number {
+  const birth = new Date(dob);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  return age;
+}
 
+export default function PatientDetailPage({ patient, onBack }: PatientDetailPageProps) {
   const activePrescriptions = patient.prescriptions.filter(rx => rx.status === 'active');
   const pastPrescriptions = patient.prescriptions.filter(rx => rx.status !== 'active');
   const doctorName = patient.prescriptions[0]?.prescribedBy ?? null;
-
-  const handleStop = () => {
-    if (!stoppingRx) return;
-    onStopPrescription(patient.id, stoppingRx.id, `${stopReason}${stopNotes ? ' — ' + stopNotes : ''}`);
-    setStoppingRx(null);
-    setStopNotes('');
-  };
+  const age = patient.dateOfBirth ? calcAge(patient.dateOfBirth) : null;
 
   return (
     <div style={{ maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -60,11 +49,9 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
 
       {/* Patient header card */}
       <div style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, overflow: 'hidden' }}>
-        {/* Accent strip */}
         <div style={{ height: 4, background: '#0AADA8' }} />
 
         <div style={{ padding: '20px 24px' }}>
-          {/* Name + MRN row */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.3px' }}>
@@ -87,7 +74,6 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
             </div>
           </div>
 
-          {/* Detail grid */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
@@ -96,6 +82,7 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
             borderTop: '1px solid #D9E8EF',
           }}>
             <InfoField label="Date of Birth" value={patient.dateOfBirth} mono />
+            {age !== null && <InfoField label="Age" value={`${age} years`} />}
             <InfoField label="Gender" value={patient.gender} />
             <InfoField label="Ward" value={patient.ward} />
             <InfoField label="Bed" value={patient.bed} mono />
@@ -139,13 +126,13 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
           {/* Column headers */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1.4fr 110px 150px 150px 180px 80px',
+            gridTemplateColumns: '1.8fr 130px 180px 160px 200px',
             padding: '9px 24px',
             borderBottom: '1px solid #D9E8EF',
             background: '#FAFBFC',
           }}>
-            {['Drug / Dose / Route', 'Food Timing', 'Time of Day', 'Prescribed At', 'Progress', ''].map((h, i) => (
-              <span key={i} style={{
+            {['Drug / Dose / Route', 'Food Timing', 'Time of Day', 'Prescribed At', 'Progress'].map((h) => (
+              <span key={h} style={{
                 fontSize: 11, fontWeight: 600, color: '#64748B',
                 textTransform: 'uppercase', letterSpacing: '0.04em',
               }}>
@@ -162,8 +149,8 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
                 key={rx.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1.4fr 110px 150px 150px 180px 80px',
-                  padding: '14px 24px',
+                  gridTemplateColumns: '1.8fr 130px 180px 160px 200px',
+                  padding: '16px 24px',
                   borderBottom: i < activePrescriptions.length - 1 ? '1px solid #D9E8EF' : 'none',
                   alignItems: 'center',
                   transition: 'background 0.1s',
@@ -191,7 +178,7 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
                 {/* Col 2: Food timing */}
                 <div>
                   <span style={{
-                    fontSize: 12, padding: '3px 8px', borderRadius: 4, display: 'inline-block',
+                    fontSize: 12, padding: '4px 10px', borderRadius: 4, display: 'inline-block',
                     background: rx.foodTiming === 'not-applicable' ? '#F0F9FB' : '#FEF3C7',
                     color: rx.foodTiming === 'not-applicable' ? '#94A3B8' : '#D97706',
                     fontWeight: rx.foodTiming === 'not-applicable' ? 400 : 500,
@@ -204,7 +191,7 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {rx.timeOfDay.map(t => (
                     <span key={t} style={{
-                      fontSize: 11, padding: '3px 8px', borderRadius: 4,
+                      fontSize: 11, padding: '3px 9px', borderRadius: 4,
                       background: '#D4F0EF', color: '#0AADA8', fontWeight: 500,
                     }}>
                       {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -219,9 +206,9 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
 
                 {/* Col 5: Progress */}
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                    <span style={{ fontWeight: 500, color: '#0F172A' }}>Day {rx.currentDay} of {rx.durationDays}</span>
-                    <span style={{ color: nearEnd ? '#D97706' : '#64748B' }}>{pct}%</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 600, color: '#0F172A' }}>Day {rx.currentDay} of {rx.durationDays}</span>
+                    <span style={{ color: nearEnd ? '#D97706' : '#64748B', fontWeight: 500 }}>{pct}%</span>
                   </div>
                   <div style={{ height: 6, background: '#D9E8EF', borderRadius: 3 }}>
                     <div style={{
@@ -233,23 +220,6 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
                   <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
                     {rx.durationDays - rx.currentDay} day{rx.durationDays - rx.currentDay !== 1 ? 's' : ''} remaining
                   </div>
-                </div>
-
-                {/* Col 6: Stop */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => setStoppingRx(rx)}
-                    style={{
-                      padding: '6px 12px', border: '1px solid #F0C4C4', borderRadius: 5,
-                      background: '#fff', color: '#DC2626', fontSize: 12, fontWeight: 500,
-                      cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#FEE2E2')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                  >
-                    Stop Order
-                  </button>
                 </div>
               </div>
             );
@@ -267,13 +237,13 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
           </div>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1.4fr 110px 150px 150px 80px',
+            gridTemplateColumns: '1.8fr 130px 180px 160px 80px',
             padding: '9px 24px',
             borderBottom: '1px solid #D9E8EF',
             background: '#FAFBFC',
           }}>
-            {['Drug / Dose', 'Food Timing', 'Time of Day', 'Prescribed At', 'Status'].map((h, i) => (
-              <span key={i} style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</span>
+            {['Drug / Dose', 'Food Timing', 'Time of Day', 'Prescribed At', 'Status'].map(h => (
+              <span key={h} style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</span>
             ))}
           </div>
           {pastPrescriptions.map((rx, i) => (
@@ -281,7 +251,7 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
               key={rx.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1.4fr 110px 150px 150px 80px',
+                gridTemplateColumns: '1.8fr 130px 180px 160px 80px',
                 padding: '12px 24px',
                 borderBottom: i < pastPrescriptions.length - 1 ? '1px solid #D9E8EF' : 'none',
                 alignItems: 'center',
@@ -321,56 +291,6 @@ export default function PatientDetailPage({ patient, onBack, onStopPrescription 
           No prescriptions on record. A doctor can add prescriptions from the Patients page.
         </div>
       )}
-
-      {/* Stop order modal */}
-      {stoppingRx && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(27,34,44,0.35)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-          <div style={{
-            background: '#fff', border: '1px solid #D9E8EF', borderRadius: 10,
-            padding: 28, width: 420, boxShadow: '0 8px 32px rgba(27,34,44,0.12)',
-          }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: '0 0 4px' }}>Stop Order</h2>
-            <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>
-              {stoppingRx.drug} — {patient.name}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={mLbl}>Reason for stopping</label>
-                <select value={stopReason} onChange={e => setStopReason(e.target.value)} style={mInp}>
-                  {STOP_REASONS.map(r => <option key={r}>{r}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={mLbl}>Notes (optional)</label>
-                <textarea
-                  value={stopNotes}
-                  onChange={e => setStopNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Additional clinical notes..."
-                  style={{ ...mInp, resize: 'vertical', minHeight: 80 }}
-                />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => { setStoppingRx(null); setStopNotes(''); }}
-                style={{ padding: '8px 16px', border: '1px solid #D9E8EF', borderRadius: 6, background: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', color: '#0F172A' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleStop}
-                style={{ padding: '8px 16px', border: 'none', borderRadius: 6, background: '#DC2626', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                Confirm Stop Order
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -389,9 +309,4 @@ function InfoField({ label, value, mono }: { label: string; value: string; mono?
 const fieldLabel: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, color: '#94A3B8',
   textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4,
-};
-const mLbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 };
-const mInp: React.CSSProperties = {
-  width: '100%', padding: '8px 12px', border: '1px solid #D9E8EF', borderRadius: 6,
-  fontSize: 13, color: '#0F172A', background: '#fff', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
 };

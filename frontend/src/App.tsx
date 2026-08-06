@@ -12,6 +12,7 @@ import RegisterPatientPage from './pages/RegisterPatientPage';
 import DoctorPatientsPage from './pages/DoctorPatientsPage';
 import DoctorPage from './pages/DoctorPage';
 import RecentActivityPage from './pages/RecentActivityPage';
+import PrescriptionWriterPage from './pages/PrescriptionWriterPage';
 import Layout from './components/Layout';
 
 export default function App() {
@@ -105,6 +106,14 @@ export default function App() {
         return <DoctorPage />;
       case 'recent-activity':
         return <RecentActivityPage />;
+      case 'prescription-writer':
+        return (
+          <PrescriptionWriterPage
+            patients={patients}
+            doctorName={user}
+            onAddPrescription={addPrescription}
+          />
+        );
       default:
         return <DashboardPage role={role} ward={ward} patients={patients} />;
     }

@@ -10,7 +10,8 @@ export type Page =
   | 'billing'
   | 'register-patient'
   | 'doctor-patients'
-  | 'doctor';
+  | 'doctor'
+  | 'prescription-writer';
 
 export interface Ward {
   id: string;

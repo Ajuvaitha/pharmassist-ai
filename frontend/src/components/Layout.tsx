@@ -1,5 +1,33 @@
 import type { Role, Page } from '../types';
 
+function GridIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/></svg>;
+}
+function SweepIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 7.5h11M8 3l4 4.5-4 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
+function PatientsIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M2 13c0-2.761 2.462-5 5.5-5s5.5 2.239 5.5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
+}
+function BoxIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 5l5.5-3 5.5 3v5L7.5 13 2 10V5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M7.5 2v11M2 5l5.5 3 5.5-3" stroke="currentColor" strokeWidth="1.3"/></svg>;
+}
+function LedgerIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="2" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M5 5.5h5M5 7.5h5M5 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
+}
+function DocIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M4 2h7a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.3"/><path d="M5 5.5h5M5 7.5h5M5 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
+}
+function AddPersonIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="6.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M1 13c0-2.761 2.239-5 5.5-5 1.27 0 2.44.43 3.37 1.15" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><path d="M11.5 9.5v4M9.5 11.5h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
+}
+function ActivityIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1.5 7.5h2l1.5-4 2 8 2-9 1.5 5H13.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
+function PenIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M10.5 2.5l2 2L5 12H3v-2l7.5-7.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M8.5 4.5l2 2" stroke="currentColor" strokeWidth="1.3"/></svg>;
+}
+
 interface LayoutProps {
   role: Role;
   page: Page;
@@ -27,6 +55,7 @@ const NAV_NURSE: NavItem[] = [
 
 const NAV_DOCTOR: NavItem[] = [
   { page: 'doctor-patients', label: 'Patients', icon: <PatientsIcon /> },
+  { page: 'prescription-writer', label: 'Prescription Writer', icon: <PenIcon /> },
   { page: 'doctor', label: 'My Prescriptions', icon: <DocIcon /> },
 ];
 
@@ -221,29 +250,4 @@ export default function Layout({ role, page, user, ward, onNavigate, children }:
       </div>
     </div>
   );
-}
-
-function GridIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/></svg>;
-}
-function SweepIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 7.5h11M8 3l4 4.5-4 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-}
-function PatientsIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M2 13c0-2.761 2.462-5 5.5-5s5.5 2.239 5.5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
-}
-function BoxIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 5l5.5-3 5.5 3v5L7.5 13 2 10V5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M7.5 2v11M2 5l5.5 3 5.5-3" stroke="currentColor" strokeWidth="1.3"/></svg>;
-}
-function LedgerIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="2" y="2" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M5 5.5h5M5 7.5h5M5 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
-}
-function DocIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M4 2h7a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.3"/><path d="M5 5.5h5M5 7.5h5M5 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
-}
-function AddPersonIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="6.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M1 13c0-2.761 2.239-5 5.5-5 1.27 0 2.44.43 3.37 1.15" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><path d="M11.5 9.5v4M9.5 11.5h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
-}
-function ActivityIcon() {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1.5 7.5h2l1.5-4 2 8 2-9 1.5 5H13.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>;
 }

@@ -59,7 +59,20 @@ describe('listActivity', () => {
     await makeEvent('restock', 'on the 5th', new Date('2026-08-05T07:00:00Z'))
     await makeEvent('restock', 'on the 6th', new Date('2026-08-06T07:00:00Z'))
 
-    const items = await listActivity(prisma, await viewerFor('k.asante'), { date: '2026-08-05', limit: 50 })
+    const items = await listActivity(prisma, await viewerFor('k.asante'), { date: new Date('2026-08-05T00:00:00.000Z'), limit: 50 })
+    expect(items).toHaveLength(1)
+    expect(items[0].text).toBe('on the 5th')
+  })
+
+  it('normalises a date carrying a time component', async () => {
+    await makeEvent('restock', 'on the 5th', new Date('2026-08-05T07:00:00Z'))
+    await makeEvent('restock', 'on the 6th', new Date('2026-08-06T07:00:00Z'))
+
+    const items = await listActivity(prisma, await viewerFor('k.asante'), {
+      date: new Date('2026-08-05T18:30:00Z'),
+      limit: 50,
+    })
+
     expect(items).toHaveLength(1)
     expect(items[0].text).toBe('on the 5th')
   })

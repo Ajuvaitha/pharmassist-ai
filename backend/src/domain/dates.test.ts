@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daysBetweenUtc, startOfUtcDay, toDateString, treatmentDayFor } from './dates'
+import { daysBetweenUtc, parseIsoDate, parseOptionalIsoDate, startOfUtcDay, toDateString, treatmentDayFor, utcDayRange } from './dates'
 
 describe('startOfUtcDay', () => {
   it('strips the time component', () => {
@@ -50,5 +50,46 @@ describe('treatmentDayFor', () => {
 describe('toDateString', () => {
   it('formats as YYYY-MM-DD in UTC', () => {
     expect(toDateString(new Date('2026-08-06T23:30:00Z'))).toBe('2026-08-06')
+  })
+})
+
+describe('parseIsoDate', () => {
+  it('parses a calendar date to UTC midnight', () => {
+    expect(parseIsoDate('2026-08-06').toISOString()).toBe('2026-08-06T00:00:00.000Z')
+  })
+
+  it('is unaffected by the host timezone', () => {
+    // A local-time implementation would shift this by the host's offset.
+    expect(parseIsoDate('2026-01-01').getUTCDate()).toBe(1)
+    expect(parseIsoDate('2026-07-01').getUTCDate()).toBe(1)
+  })
+
+  it('rejects a malformed date rather than producing an Invalid Date', () => {
+    expect(() => parseIsoDate('06-08-2026')).toThrow()
+    expect(() => parseIsoDate('2026-13-01')).toThrow()
+    expect(() => parseIsoDate('')).toThrow()
+  })
+})
+
+describe('parseOptionalIsoDate', () => {
+  it('returns undefined for an absent value', () => {
+    expect(parseOptionalIsoDate(undefined)).toBeUndefined()
+  })
+
+  it('parses a present value', () => {
+    expect(parseOptionalIsoDate('2026-08-06')?.toISOString()).toBe('2026-08-06T00:00:00.000Z')
+  })
+})
+
+describe('utcDayRange', () => {
+  it('is half-open — the next day is excluded', () => {
+    const range = utcDayRange(new Date('2026-08-06T13:00:00Z'))
+    expect(range.gte.toISOString()).toBe('2026-08-06T00:00:00.000Z')
+    expect(range.lt.toISOString()).toBe('2026-08-07T00:00:00.000Z')
+  })
+
+  it('normalises a value carrying a time component', () => {
+    const range = utcDayRange(new Date('2026-08-06T23:59:59Z'))
+    expect(range.gte.toISOString()).toBe('2026-08-06T00:00:00.000Z')
   })
 })

@@ -1,7 +1,21 @@
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient, Prisma } from '@prisma/client'
 import type { SessionUser, SweepStatus, Ward } from '@pharmassist/shared'
 import { toWardDto } from '../../domain/dto'
 import { todayUtc } from '../../domain/dates'
+import { AppError } from '../../errors'
+
+/**
+ * A nurse sees only their assigned ward. wardId is nullable, so a nurse
+ * account with no assigned ward is constructible; that case must fail
+ * closed rather than fall through to an unscoped, all-wards query.
+ */
+function wardScope(viewer: SessionUser): Prisma.WardWhereInput {
+  if (viewer.role === 'nurse') {
+    if (!viewer.ward) throw AppError.forbidden('Your account has no assigned ward')
+    return { id: viewer.ward.id }
+  }
+  return {}
+}
 
 /**
  * A nurse sees only their assigned ward. This is the server-side
@@ -13,7 +27,7 @@ export async function listWards(
   viewer: SessionUser,
   on: Date = todayUtc(),
 ): Promise<Ward[]> {
-  const scope = viewer.role === 'nurse' && viewer.ward ? { id: viewer.ward.id } : {}
+  const scope = wardScope(viewer)
 
   const wards = await prisma.ward.findMany({
     where: scope,

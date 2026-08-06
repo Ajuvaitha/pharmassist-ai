@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { seed } from '../../../prisma/seed'
 import { getTestPrisma, resetDatabase } from '../../test/db'
 import { listWards } from './service'
+import { AppError } from '../../errors'
 import type { SessionUser } from '@pharmassist/shared'
 
 const prisma = getTestPrisma()
@@ -34,6 +35,11 @@ describe('listWards', () => {
     const wards = await listWards(prisma, await viewerFor('a.owusu'))
     expect(wards).toHaveLength(1)
     expect(wards[0].code).toBe('Ward 4A')
+  })
+
+  it('rejects a nurse whose account has no assigned ward instead of returning every ward', async () => {
+    const viewer: SessionUser = { ...(await viewerFor('a.owusu')), ward: null }
+    await expect(listWards(prisma, viewer)).rejects.toBeInstanceOf(AppError)
   })
 
   it('composes the display label', async () => {

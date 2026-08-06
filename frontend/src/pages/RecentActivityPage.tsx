@@ -1,32 +1,8 @@
 import { useState } from 'react';
+import type { ActivityItem } from '@pharmassist/shared';
+import { useActivity } from '../api/activity';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import StatusPill from '../components/StatusPill';
-
-interface ActivityItem {
-  id: string;
-  time: string;
-  date: string;
-  type: 'dispense' | 'prescription' | 'stop' | 'restock' | 'register';
-  patient?: string;
-  ward?: string;
-  drug?: string;
-  text: string;
-  status?: 'billed' | 'pending' | 'voided';
-}
-
-const ALL_ACTIVITY: ActivityItem[] = [
-  { id: 'a1', time: '08:30', date: '2026-08-05', type: 'dispense', patient: 'Esi Mensah', ward: 'Ward 2D', drug: 'Ondansetron 8mg', text: 'Dispensed Ondansetron 8mg × 3 — Esi Mensah (Ward 2D)', status: 'pending' },
-  { id: 'a2', time: '08:02', date: '2026-08-05', type: 'dispense', patient: 'Kwame Asante', ward: 'Ward 6C', drug: 'Tramadol 50mg', text: 'Dispensed Tramadol 50mg × 16 — Kwame Asante (Ward 6C)', status: 'pending' },
-  { id: 'a3', time: '07:45', date: '2026-08-05', type: 'dispense', patient: 'Abena Frimpong', ward: 'Ward 5B', drug: 'Atorvastatin 40mg', text: 'Dispensed Atorvastatin 40mg × 5 — Abena Frimpong (Ward 5B)', status: 'billed' },
-  { id: 'a4', time: '07:17', date: '2026-08-05', type: 'dispense', patient: 'James Kofi Antwi', ward: 'Ward 4A', drug: 'Furosemide 40mg', text: 'Dispensed Furosemide 40mg × 2 — James Kofi Antwi (Ward 4A)', status: 'billed' },
-  { id: 'a5', time: '07:14', date: '2026-08-05', type: 'dispense', patient: 'Margaret Osei', ward: 'Ward 4A', drug: 'Amoxicillin 500mg', text: 'Dispensed Amoxicillin 500mg × 3 + Metformin 500mg × 4 — Margaret Osei (Ward 4A)', status: 'billed' },
-  { id: 'a6', time: '06:58', date: '2026-08-05', type: 'prescription', patient: 'James Kofi Antwi', ward: 'Ward 4A', drug: 'Spironolactone 25mg', text: 'New prescription: Spironolactone 25mg OD — James Kofi Antwi (Ward 4A)' },
-  { id: 'a7', time: '06:40', date: '2026-08-05', type: 'stop', patient: 'James Kofi Antwi', ward: 'Ward 4A', drug: 'Digoxin 0.25mg', text: 'Stop order: Digoxin 0.25mg — James Kofi Antwi — Toxicity suspected' },
-  { id: 'a8', time: '07:20', date: '2026-08-04', type: 'dispense', patient: 'James Kofi Antwi', ward: 'Ward 4A', drug: 'Furosemide 40mg', text: 'Dispensed Furosemide 40mg × 2 — James Kofi Antwi (Ward 4A)', status: 'billed' },
-  { id: 'a9', time: '09:10', date: '2026-08-04', type: 'register', text: 'Patient registered: Kwame Asante — Ward 6C, Bed 03' },
-  { id: 'a10', time: '08:45', date: '2026-08-04', type: 'restock', drug: 'Furosemide 40mg', text: 'Restocked Furosemide 40mg — +200 tablets (Ref: PO-2026-0480)' },
-  { id: 'a11', time: '10:00', date: '2026-08-03', type: 'prescription', patient: 'Abena Frimpong', ward: 'Ward 5B', drug: 'Bisoprolol 5mg', text: 'New prescription: Bisoprolol 5mg OD — Abena Frimpong (Ward 5B)' },
-  { id: 'a12', time: '09:00', date: '2026-08-03', type: 'register', text: 'Patient registered: Abena Frimpong — Ward 5B, Bed 12' },
-];
 
 const TYPE_FILTERS = [
   { value: 'all', label: 'All' },
@@ -62,6 +38,9 @@ function formatDate(d: string) {
 export default function RecentActivityPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+
+  const { data: activity, isLoading, error } = useActivity({ limit: 100 });
+  const ALL_ACTIVITY: ActivityItem[] = activity ?? [];
 
   const filtered = ALL_ACTIVITY.filter(item => {
     const matchType = typeFilter === 'all' || item.type === typeFilter;
@@ -122,6 +101,9 @@ export default function RecentActivityPage() {
           {filtered.length} event{filtered.length !== 1 ? 's' : ''}
         </span>
       </div>
+
+      {isLoading && <LoadingPanel />}
+      {error && <ErrorPanel error={error} />}
 
       {/* Activity feed grouped by date */}
       {grouped.length === 0 ? (

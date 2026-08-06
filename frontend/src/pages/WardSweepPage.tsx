@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { WARDS } from '../data';
-import type { Patient } from '../types';
+import type { Patient, Ward } from '../types';
 import SweepBar from '../components/SweepBar';
 import StatusPill from '../components/StatusPill';
 
-interface WardSweepPageProps {
-  patients: Patient[];
-}
+// TODO(Task 13): this page is not wired yet — usePickupList/useDispense land in
+// Task 13. These placeholders stand in for the data.ts arrays and prop this page
+// used to read so the frontend can typecheck and build without the mock file.
+const WARDS: Ward[] = [];
 
 function buildPatientPickList(wardName: string, patients: Patient[]) {
   return patients
@@ -41,7 +41,9 @@ function CheckIcon() {
   );
 }
 
-export default function WardSweepPage({ patients }: WardSweepPageProps) {
+export default function WardSweepPage() {
+  // TODO(Task 13): patients previously arrived as a prop; wire to a real hook.
+  const patients: Patient[] = [];
   const [activeWardId, setActiveWardId] = useState(WARDS[0].id);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [search, setSearch] = useState('');

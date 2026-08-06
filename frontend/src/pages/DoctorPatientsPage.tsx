@@ -1,18 +1,24 @@
 import { useState } from 'react';
 import type { Patient, Prescription } from '../types';
+import type { CreatePrescriptionRequest } from '@pharmassist/shared';
+import { usePatients } from '../api/patients';
+import { useCreatePrescription, useUpdatePrescription } from '../api/prescriptions';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import StatusPill from '../components/StatusPill';
 import PrescriptionForm from '../components/PrescriptionForm';
 
 interface DoctorPatientsPageProps {
-  patients: Patient[];
   doctorName: string;
-  onAddPrescription: (patientId: string, rx: Omit<Prescription, 'id' | 'currentDay' | 'status'>) => void;
-  onEditPrescription: (patientId: string, rxId: string, rx: Omit<Prescription, 'id' | 'currentDay' | 'status'>) => void;
 }
 
-export default function DoctorPatientsPage({ patients, doctorName, onAddPrescription, onEditPrescription }: DoctorPatientsPageProps) {
+export default function DoctorPatientsPage({ doctorName }: DoctorPatientsPageProps) {
+  const { data, isLoading, error } = usePatients();
+  const createRx = useCreatePrescription();
+  const updateRx = useUpdatePrescription();
+  const patients = data ?? [];
+
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Patient | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<'view' | 'add' | 'edit'>(  'view');
   const [editingRx, setEditingRx] = useState<Prescription | null>(null);
 
@@ -23,34 +29,39 @@ export default function DoctorPatientsPage({ patients, doctorName, onAddPrescrip
     p.ward.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleSelect = (p: Patient) => { setSelected(p); setMode('view'); };
+  const selectedPatient = patients.find(p => p.id === selectedId) ?? null;
 
-  const handleAdd = (rx: Omit<Prescription, 'id' | 'currentDay' | 'status'>) => {
-    if (!selected) return;
-    onAddPrescription(selected.id, rx);
-    // Reflect locally
-    setSelected(prev => prev ? {
-      ...prev,
-      prescriptions: [...prev.prescriptions, { ...rx, id: `rx-${Date.now()}`, currentDay: 1, status: 'active' }],
-    } : null);
-    setMode('view');
+  const handleSelect = (p: Patient) => { setSelectedId(p.id); setMode('view'); };
+
+  const handleAdd = (rx: CreatePrescriptionRequest) => {
+    if (!selectedPatient) return;
+    createRx.mutate(
+      { patientId: selectedPatient.id, input: rx },
+      { onSuccess: () => { setMode('view'); setEditingRx(null); } },
+    );
   };
 
-  const handleEdit = (rx: Omit<Prescription, 'id' | 'currentDay' | 'status'>) => {
-    if (!selected || !editingRx) return;
-    onEditPrescription(selected.id, editingRx.id, rx);
-    setSelected(prev => prev ? {
-      ...prev,
-      prescriptions: prev.prescriptions.map(p =>
-        p.id === editingRx.id ? { ...p, ...rx } : p
-      ),
-    } : null);
-    setMode('view');
-    setEditingRx(null);
+  const handleEdit = (rx: CreatePrescriptionRequest) => {
+    if (!editingRx) return;
+    updateRx.mutate(
+      { id: editingRx.id, input: rx },
+      { onSuccess: () => { setMode('view'); setEditingRx(null); } },
+    );
   };
 
-  const activePrescriptions = selected?.prescriptions.filter(rx => rx.status === 'active') ?? [];
-  const pastPrescriptions = selected?.prescriptions.filter(rx => rx.status !== 'active') ?? [];
+  const activePrescriptions = selectedPatient?.prescriptions.filter(rx => rx.status === 'active') ?? [];
+  const pastPrescriptions = selectedPatient?.prescriptions.filter(rx => rx.status !== 'active') ?? [];
+
+  const details: { label: string; value: string; wide?: boolean; alert?: boolean }[] = selectedPatient
+    ? [
+        { label: 'Date of Birth', value: selectedPatient.dateOfBirth },
+        { label: 'Gender', value: selectedPatient.gender },
+        { label: 'Ward / Bed', value: `${selectedPatient.ward} · ${selectedPatient.bed}` },
+        { label: 'Admitted', value: selectedPatient.admissionDate },
+        { label: 'Diagnosis', value: selectedPatient.diagnosis, wide: true },
+        { label: 'Allergies', value: selectedPatient.allergies || 'None known', alert: !!selectedPatient.allergies && selectedPatient.allergies !== 'None known' },
+      ]
+    : [];
 
   return (
     <div style={{ display: 'flex', gap: 20, height: 'calc(100vh - 100px)', maxWidth: 1100 }}>
@@ -72,6 +83,9 @@ export default function DoctorPatientsPage({ patients, doctorName, onAddPrescrip
           />
         </div>
 
+        {isLoading && <LoadingPanel />}
+        {error && <ErrorPanel error={error} />}
+
         <div style={{
           flex: 1, overflowY: 'auto',
           background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, overflow: 'hidden',
@@ -83,7 +97,7 @@ export default function DoctorPatientsPage({ patients, doctorName, onAddPrescrip
           )}
           {filtered.map((p, i) => {
             const active = p.prescriptions.filter(rx => rx.status === 'active').length;
-            const isSelected = selected?.id === p.id;
+            const isSelected = selectedPatient?.id === p.id;
             return (
               <button
                 key={p.id}
@@ -121,15 +135,15 @@ export default function DoctorPatientsPage({ patients, doctorName, onAddPrescrip
       </div>
 
       {/* Detail panel */}
-      {selected ? (
+      {selectedPatient ? (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, overflowY: 'auto' }}>
           {/* Patient header */}
           <div style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: 0 }}>{selected.name}</h2>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: 0 }}>{selectedPatient.name}</h2>
                 <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                  {selected.mrn}
+                  {selectedPatient.mrn}
                 </div>
               </div>
               {mode === 'view' && (
@@ -150,21 +164,14 @@ export default function DoctorPatientsPage({ patients, doctorName, onAddPrescrip
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 14 }}>
-              {[
-                { label: 'Date of Birth', value: selected.dateOfBirth },
-                { label: 'Gender', value: selected.gender },
-                { label: 'Ward / Bed', value: `${selected.ward} · ${selected.bed}` },
-                { label: 'Admitted', value: selected.admissionDate },
-                { label: 'Diagnosis', value: selected.diagnosis, wide: true },
-                { label: 'Allergies', value: selected.allergies || 'None known', alert: !!selected.allergies && selected.allergies !== 'None known' },
-              ].map(item => (
-                <div key={item.label} style={{ gridColumn: (item as any).wide ? '1 / -1' : undefined }}>
+              {details.map(item => (
+                <div key={item.label} style={{ gridColumn: item.wide ? '1 / -1' : undefined }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
                     {item.label}
                   </div>
                   <div style={{
-                    fontSize: 13, color: (item as any).alert ? '#DC2626' : '#0F172A',
-                    fontWeight: (item as any).alert ? 600 : 400,
+                    fontSize: 13, color: item.alert ? '#DC2626' : '#0F172A',
+                    fontWeight: item.alert ? 600 : 400,
                   }}>
                     {item.value}
                   </div>

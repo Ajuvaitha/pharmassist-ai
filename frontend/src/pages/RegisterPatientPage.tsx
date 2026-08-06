@@ -1,19 +1,14 @@
 import { useState } from 'react';
 import type { Patient } from '../types';
-import { WARDS as WARD_LIST } from '../data';
+import { useWards } from '../api/wards';
+import { useCreatePatient } from '../api/patients';
+import { ErrorPanel } from '../components/AsyncState';
 
-interface RegisterPatientPageProps {
-  onRegister: (patient: Patient) => void;
-}
-
-const WARDS = WARD_LIST.map(w => w.code);
 const BEDS = Array.from({ length: 20 }, (_, i) => `Bed ${String(i + 1).padStart(2, '0')}`);
 
-function generateMRN() {
-  return `MRN-${String(Math.floor(10000 + Math.random() * 90000))}`;
-}
-
-export default function RegisterPatientPage({ onRegister }: RegisterPatientPageProps) {
+export default function RegisterPatientPage() {
+  const { data: wards } = useWards();
+  const createPatient = useCreatePatient();
   const [submitted, setSubmitted] = useState(false);
   const [registeredName, setRegisteredName] = useState('');
 
@@ -22,7 +17,7 @@ export default function RegisterPatientPage({ onRegister }: RegisterPatientPageP
     dateOfBirth: '',
     gender: 'Female' as Patient['gender'],
     phone: '',
-    ward: WARDS[0],
+    wardId: '',
     bed: BEDS[0],
     admissionDate: new Date().toISOString().split('T')[0],
     diagnosis: '',
@@ -34,31 +29,33 @@ export default function RegisterPatientPage({ onRegister }: RegisterPatientPageP
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const patient: Patient = {
-      id: `p-${Date.now()}`,
-      mrn: generateMRN(),
-      name: form.name.trim(),
-      dateOfBirth: form.dateOfBirth,
-      gender: form.gender,
-      phone: form.phone.trim(),
-      ward: form.ward,
-      wardId: WARD_LIST.find(w => w.code === form.ward)?.id ?? '',
-      bed: form.bed,
-      admissionDate: form.admissionDate,
-      diagnosis: form.diagnosis.trim(),
-      allergies: form.allergies.trim(),
-      status: 'admitted',
-      prescriptions: [],
-    };
-    onRegister(patient);
-    setRegisteredName(patient.name);
-    setSubmitted(true);
-    setForm({
-      name: '', dateOfBirth: '', gender: 'Female', phone: '',
-      ward: WARDS[0], bed: BEDS[0],
-      admissionDate: new Date().toISOString().split('T')[0],
-      diagnosis: '', allergies: 'None known',
-    });
+    if (!form.wardId) return;
+
+    createPatient.mutate(
+      {
+        name: form.name.trim(),
+        dateOfBirth: form.dateOfBirth,
+        gender: form.gender,
+        phone: form.phone.trim(),
+        wardId: form.wardId,
+        bed: form.bed,
+        admissionDate: form.admissionDate,
+        diagnosis: form.diagnosis.trim(),
+        allergies: form.allergies.trim(),
+      },
+      {
+        onSuccess: (patient) => {
+          setRegisteredName(patient.name);
+          setSubmitted(true);
+          setForm({
+            name: '', dateOfBirth: '', gender: 'Female', phone: '',
+            wardId: '', bed: BEDS[0],
+            admissionDate: new Date().toISOString().split('T')[0],
+            diagnosis: '', allergies: 'None known',
+          });
+        },
+      },
+    );
   };
 
   return (
@@ -121,8 +118,9 @@ export default function RegisterPatientPage({ onRegister }: RegisterPatientPageP
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <div>
               <label style={lbl}>Ward</label>
-              <select value={form.ward} onChange={set('ward')} style={inp}>
-                {WARDS.map(w => <option key={w}>{w}</option>)}
+              <select value={form.wardId} onChange={set('wardId')} style={inp} required>
+                <option value="">Select a ward…</option>
+                {(wards ?? []).map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
               </select>
             </div>
             <div>
@@ -164,6 +162,8 @@ export default function RegisterPatientPage({ onRegister }: RegisterPatientPageP
             </div>
           </div>
         </Section>
+
+        {createPatient.error && <ErrorPanel error={createPatient.error} />}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
           <button type="submit" style={{

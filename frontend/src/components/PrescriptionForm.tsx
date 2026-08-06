@@ -1,17 +1,13 @@
 import { useState } from 'react';
-import type { Prescription, FoodTiming, MedRoute, TimeOfDay } from '../types';
-import { FREQUENCIES, type Frequency } from '@pharmassist/shared';
+import type { FoodTiming, MedRoute, Prescription, TimeOfDay } from '../types';
+import { FREQUENCIES, type CreatePrescriptionRequest, type Frequency } from '@pharmassist/shared';
+import { useDrugs } from '../api/drugs';
 
 interface PrescriptionFormProps {
   initial?: Partial<Prescription>;
   prescribedBy: string;
-  onSave: (rx: Omit<Prescription, 'id' | 'currentDay' | 'status'>) => void;
+  onSave: (rx: CreatePrescriptionRequest) => void;
   onCancel: () => void;
-}
-
-/** Derives a stable drug id from its label, matching the scheme used across mock data. */
-function slugifyDrug(label: string): string {
-  return `d-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 }
 
 const ROUTES: MedRoute[] = ['Oral', 'IV', 'IM', 'SC', 'Topical', 'Inhaled'];
@@ -28,8 +24,9 @@ const TIMES_OF_DAY: { value: TimeOfDay; label: string }[] = [
   { value: 'night', label: 'Night' },
 ];
 
-export default function PrescriptionForm({ initial, prescribedBy, onSave, onCancel }: PrescriptionFormProps) {
-  const [drug, setDrug] = useState(initial?.drug ?? '');
+export default function PrescriptionForm({ initial, onSave, onCancel }: PrescriptionFormProps) {
+  const { data: drugs } = useDrugs();
+  const [drugId, setDrugId] = useState(initial?.drugId ?? '');
   const [dose, setDose] = useState(initial?.dose ?? '');
   const [route, setRoute] = useState<MedRoute>(initial?.route ?? 'Oral');
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? 'OD');
@@ -47,10 +44,9 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!drug.trim() || !dose.trim()) return;
+    if (!drugId || !dose.trim()) return;
     onSave({
-      drugId: initial?.drugId ?? slugifyDrug(drug.trim()),
-      drug: drug.trim(),
+      drugId,
       dose: dose.trim(),
       route,
       frequency,
@@ -59,8 +55,6 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
       startDate,
       durationDays: parseInt(durationDays) || 7,
       notes: notes.trim() || undefined,
-      prescribedBy,
-      prescribedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
     });
   };
 
@@ -68,14 +62,11 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 12 }}>
         <div>
-          <label style={lbl}>Drug Name</label>
-          <input
-            required
-            value={drug}
-            onChange={e => setDrug(e.target.value)}
-            placeholder="e.g. Amoxicillin 500mg"
-            style={inp}
-          />
+          <label style={lbl}>Drug</label>
+          <select required value={drugId} onChange={e => setDrugId(e.target.value)} style={inp}>
+            <option value="">Select a drug…</option>
+            {(drugs ?? []).map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
         </div>
         <div>
           <label style={lbl}>Dose</label>

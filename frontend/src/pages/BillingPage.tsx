@@ -1,7 +1,11 @@
 import { useState } from 'react';
-import { TRANSACTIONS } from '../data';
 import type { Transaction } from '../types';
 import StatusPill from '../components/StatusPill';
+
+// TODO(Task 13): this page is not wired yet — useBilling lands in Task 13. This
+// placeholder stands in for the data.ts array this page used to read so the
+// frontend can typecheck and build without the mock file.
+const TRANSACTIONS: Transaction[] = [];
 
 // Group transactions by patient
 function groupByPatient(txns: Transaction[]) {

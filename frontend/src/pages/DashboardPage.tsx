@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import type { Role, Patient } from '../types';
-import { WARDS, INVENTORY, TRANSACTIONS } from '../data';
+import type { InventoryItem, Patient, Role, Transaction, Ward } from '../types';
 import StatusPill from '../components/StatusPill';
 
 interface DashboardPageProps {
   role: Role;
   ward: string;
-  patients: Patient[];
 }
 
 type DrillKey = 'patients' | 'prescriptions' | 'pickups' | 'lowstock' | null;
@@ -16,10 +14,19 @@ const FOOD_LABEL: Record<string, string> = {
   'with-food': 'With food', 'not-applicable': '—',
 };
 
-export default function DashboardPage({ role, ward, patients }: DashboardPageProps) {
+// TODO(Task 13): this page is not wired yet — useDashboard/useBilling/usePickupList
+// land in Task 13. These placeholders stand in for the data.ts arrays this page
+// used to read so the frontend can typecheck and build without the mock file.
+const WARDS: Ward[] = [];
+const INVENTORY: InventoryItem[] = [];
+const TRANSACTIONS: Transaction[] = [];
+
+export default function DashboardPage({ role, ward }: DashboardPageProps) {
   const [drill, setDrill] = useState<DrillKey>(null);
   const [wardSearch, setWardSearch] = useState('');
   const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
+  // TODO(Task 13): patients previously arrived as a prop; wire to a real hook.
+  const patients: Patient[] = [];
 
   const visibleWards = role === 'nurse'
     ? WARDS.filter(w => ward.includes(w.code))

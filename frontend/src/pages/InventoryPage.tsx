@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { INVENTORY } from '../data';
 import type { InventoryItem } from '../types';
+import { useCategories, useInventory, useRestock } from '../api/inventory';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import StatusPill from '../components/StatusPill';
-
-const CATEGORIES = ['All', ...Array.from(new Set(INVENTORY.map(i => i.category)))];
 
 export default function InventoryPage() {
   const [search, setSearch] = useState('');
@@ -11,29 +10,29 @@ export default function InventoryPage() {
   const [restocking, setRestocking] = useState<InventoryItem | null>(null);
   const [restockQty, setRestockQty] = useState('');
   const [restockRef, setRestockRef] = useState('');
-  const [stocks, setStocks] = useState<Record<string, number>>({});
 
-  const filtered = INVENTORY.filter(item =>
-    (category === 'All' || item.category === category) &&
-    (!search || item.drug.toLowerCase().includes(search.toLowerCase()))
-  );
+  const { data: items, isLoading, error } = useInventory({ search: search || undefined, category });
+  const { data: fetchedCategories } = useCategories();
+  const restockMutation = useRestock();
 
-  const getStock = (item: InventoryItem) => stocks[item.id] ?? item.currentStock;
-  const getStatus = (item: InventoryItem): InventoryItem['status'] => {
-    const s = getStock(item);
-    if (s <= item.reorderLevel * 0.2) return 'critical';
-    if (s <= item.reorderLevel) return 'low';
-    return 'ok';
-  };
+  const CATEGORIES = ['All', ...(fetchedCategories ?? [])];
+  const filtered = items ?? [];
 
   const handleRestock = () => {
-    if (!restocking || !restockQty) return;
+    if (!restocking) return;
     const qty = parseInt(restockQty);
-    if (isNaN(qty) || qty <= 0) return;
-    setStocks(prev => ({ ...prev, [restocking.id]: getStock(restocking) + qty }));
-    setRestocking(null);
-    setRestockQty('');
-    setRestockRef('');
+    if (!qty || qty <= 0) return;
+
+    restockMutation.mutate(
+      { drugId: restocking.drugId, input: { qty, ref: restockRef.trim() || undefined } },
+      {
+        onSuccess: () => {
+          setRestocking(null);
+          setRestockQty('');
+          setRestockRef('');
+        },
+      },
+    );
   };
 
   const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -86,6 +85,8 @@ export default function InventoryPage() {
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, overflow: 'hidden' }}>
+        {isLoading && <LoadingPanel />}
+        {error && <ErrorPanel error={error} />}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 120px 80px 100px 80px 80px 100px',
@@ -121,17 +122,17 @@ export default function InventoryPage() {
             <span style={{
               fontSize: 14,
               fontFamily: 'IBM Plex Mono, monospace',
-              color: getStatus(item) === 'critical' ? '#DC2626' : getStatus(item) === 'low' ? '#D97706' : '#0F172A',
+              color: item.status === 'critical' ? '#DC2626' : item.status === 'low' ? '#D97706' : '#0F172A',
               textAlign: 'right',
               fontWeight: 500,
             }}>
-              {getStock(item)}
+              {item.currentStock}
             </span>
             <span style={{ fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B', textAlign: 'right' }}>
               {item.reorderLevel}
             </span>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <StatusPill status={getStatus(item)} />
+              <StatusPill status={item.status} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button

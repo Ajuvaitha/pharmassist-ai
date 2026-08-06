@@ -3,7 +3,7 @@ import type { CreatePatientRequest, Patient, PatientListQuery, SessionUser } fro
 import { ErrorCode } from '@pharmassist/shared'
 import { AppError } from '../../errors'
 import { toPatientDto } from '../../domain/dto'
-import { todayUtc } from '../../domain/dates'
+import { parseIsoDate, todayUtc } from '../../domain/dates'
 
 const patientInclude = {
   ward: true,
@@ -107,12 +107,12 @@ export async function createPatient(
         data: {
           mrn: await nextMrn(tx),
           name: input.name,
-          dateOfBirth: new Date(input.dateOfBirth),
+          dateOfBirth: parseIsoDate(input.dateOfBirth),
           gender: input.gender,
           phone: input.phone,
           wardId: input.wardId,
           bed: input.bed,
-          admissionDate: new Date(input.admissionDate),
+          admissionDate: parseIsoDate(input.admissionDate),
           diagnosis: input.diagnosis,
           allergies: input.allergies,
         },

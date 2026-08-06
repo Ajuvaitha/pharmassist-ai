@@ -69,6 +69,24 @@ describe('parseIsoDate', () => {
     expect(() => parseIsoDate('2026-13-01')).toThrow()
     expect(() => parseIsoDate('')).toThrow()
   })
+
+  it('rejects a shape-valid date that rolls over to a different day', () => {
+    // JavaScript's Date would silently normalise each of these to a real
+    // date in the following month rather than failing.
+    expect(() => parseIsoDate('2026-02-31')).toThrow()
+    expect(() => parseIsoDate('2026-04-31')).toThrow()
+    expect(() => parseIsoDate('2026-02-30')).toThrow()
+  })
+
+  it('accepts a real leap day', () => {
+    // 2028 is a leap year — this must not be caught by an over-eager
+    // rollover check.
+    expect(parseIsoDate('2028-02-29').toISOString()).toBe('2028-02-29T00:00:00.000Z')
+  })
+
+  it('throws AppError.invalidInput naming the offending value, not a bare RangeError', () => {
+    expect(() => parseIsoDate('2026-02-31')).toThrow('2026-02-31')
+  })
 })
 
 describe('parseOptionalIsoDate', () => {

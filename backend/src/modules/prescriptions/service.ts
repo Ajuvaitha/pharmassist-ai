@@ -9,7 +9,7 @@ import { ErrorCode } from '@pharmassist/shared'
 import { AppError } from '../../errors'
 import { toFoodTimingEnum } from '../../domain/enums'
 import { toPrescriptionDto } from '../../domain/dto'
-import { todayUtc } from '../../domain/dates'
+import { parseIsoDate, todayUtc } from '../../domain/dates'
 import { assertWardAccess } from '../patients/service'
 import { closeIndentIfComplete } from '../indents/service'
 
@@ -40,7 +40,7 @@ export async function createPrescription(
         frequency: input.frequency,
         foodTiming: toFoodTimingEnum(input.foodTiming),
         timeOfDay: input.timeOfDay,
-        startDate: new Date(input.startDate),
+        startDate: parseIsoDate(input.startDate),
         durationDays: input.durationDays,
         notes: input.notes ?? null,
         prescribedById: actor.id,
@@ -107,7 +107,7 @@ export async function updatePrescription(
         ...(input.frequency ? { frequency: input.frequency } : {}),
         ...(input.foodTiming ? { foodTiming: toFoodTimingEnum(input.foodTiming) } : {}),
         ...(input.timeOfDay ? { timeOfDay: input.timeOfDay } : {}),
-        ...(input.startDate ? { startDate: new Date(input.startDate) } : {}),
+        ...(input.startDate ? { startDate: parseIsoDate(input.startDate) } : {}),
         ...(input.durationDays ? { durationDays: input.durationDays } : {}),
         ...(input.notes === undefined ? {} : { notes: input.notes || null }),
       },

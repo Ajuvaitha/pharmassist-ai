@@ -1,3 +1,5 @@
+import { AppError } from '../errors'
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /**
@@ -33,18 +35,28 @@ export function toDateString(date: Date): string {
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /**
- * Parses a calendar date to UTC midnight. Throws rather than returning an
- * Invalid Date, which would otherwise flow silently into a `@db.Date`
- * query and match nothing.
+ * Parses a calendar date to UTC midnight. Guarantees the result names the
+ * same calendar day as the input: `value` must match `YYYY-MM-DD`, and the
+ * parsed date is round-tripped back through `toISOString` and compared to
+ * `value` literally. That catches not just shapes `Date` itself rejects
+ * (month 13) but shapes it would silently roll over — `2026-02-31` would
+ * otherwise construct successfully as 2026-03-03, so a caller's request
+ * for a day that does not exist would quietly return a different day's
+ * data instead of an error.
+ *
+ * Throws AppError.invalidInput (400) rather than returning an Invalid
+ * Date or a bare RangeError — either would otherwise reach the generic
+ * error handler and surface to the client as a 500 for what is plainly
+ * bad input.
  */
 export function parseIsoDate(value: string): Date {
   if (!ISO_DATE.test(value)) {
-    throw new RangeError(`Expected a YYYY-MM-DD date, received "${value}"`)
+    throw AppError.invalidInput(`Expected a YYYY-MM-DD date, received "${value}"`)
   }
 
   const parsed = new Date(`${value}T00:00:00.000Z`)
-  if (Number.isNaN(parsed.getTime())) {
-    throw new RangeError(`"${value}" is not a real calendar date`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw AppError.invalidInput(`"${value}" is not a real calendar date`)
   }
 
   return parsed

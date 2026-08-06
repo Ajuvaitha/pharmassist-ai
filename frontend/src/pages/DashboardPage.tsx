@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import type { InventoryItem, Patient, Role, Transaction, Ward } from '../types';
+import type { Role } from '../types';
+import { useWards } from '../api/wards';
+import { usePatients } from '../api/patients';
+import { useInventory } from '../api/inventory';
+import { useBilling } from '../api/billing';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import StatusPill from '../components/StatusPill';
 
 interface DashboardPageProps {
@@ -14,40 +19,39 @@ const FOOD_LABEL: Record<string, string> = {
   'with-food': 'With food', 'not-applicable': '—',
 };
 
-// TODO(Task 13): this page is not wired yet — useDashboard/useBilling/usePickupList
-// land in Task 13. These placeholders stand in for the data.ts arrays this page
-// used to read so the frontend can typecheck and build without the mock file.
-const WARDS: Ward[] = [];
-const INVENTORY: InventoryItem[] = [];
-const TRANSACTIONS: Transaction[] = [];
-
 export default function DashboardPage({ role, ward }: DashboardPageProps) {
   const [drill, setDrill] = useState<DrillKey>(null);
   const [wardSearch, setWardSearch] = useState('');
   const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
-  // TODO(Task 13): patients previously arrived as a prop; wire to a real hook.
-  const patients: Patient[] = [];
 
-  const visibleWards = role === 'nurse'
-    ? WARDS.filter(w => ward.includes(w.code))
-    : WARDS;
+  const wardsQuery = useWards();
+  const patientsQuery = usePatients();
+  const inventoryQuery = useInventory();
+  const billingQuery = useBilling();
 
-  const activePatients = patients.filter(p =>
-    role === 'nurse' ? p.ward.includes(ward.split(' — ')[0]) : true
+  const isLoading = wardsQuery.isLoading || patientsQuery.isLoading
+    || inventoryQuery.isLoading || billingQuery.isLoading;
+  const error = wardsQuery.error ?? patientsQuery.error
+    ?? inventoryQuery.error ?? billingQuery.error;
+
+  // The server scopes a nurse to their ward now, so the old client-side
+  // filtering on ward.split(' — ') is gone.
+  const visibleWards = wardsQuery.data ?? [];
+  const activePatients = patientsQuery.data ?? [];
+  const allActivePrescriptions = activePatients.flatMap(p =>
+    p.prescriptions.filter(rx => rx.status === 'active').map(rx => ({
+      ...rx, patientName: p.name, patientId: p.id, ward: p.ward, bed: p.bed,
+    }))
   );
-
-  const allActivePrescriptions = patients.flatMap(p =>
-    p.prescriptions.filter(rx => rx.status === 'active').map(rx => ({ ...rx, patientName: p.name, patientId: p.id, ward: p.ward, bed: p.bed }))
-  );
-
-  // Group active prescriptions by patient
   const rxByPatient = activePatients.map(p => ({
     patient: p,
     prescriptions: p.prescriptions.filter(rx => rx.status === 'active'),
   })).filter(g => g.prescriptions.length > 0);
-
-  const pendingPickups = TRANSACTIONS.filter(t => t.status === 'pending');
-  const lowStockItems = INVENTORY.filter(i => i.status === 'low' || i.status === 'critical');
+  const pendingPickups = (billingQuery.data ?? [])
+    .flatMap(g => g.transactions)
+    .filter(t => t.status === 'pending');
+  const lowStockItems = (inventoryQuery.data ?? [])
+    .filter(i => i.status === 'low' || i.status === 'critical');
 
   const metrics = [
     { key: 'patients' as DrillKey, label: 'Active Patients', value: activePatients.length, sub: 'across all wards', valueColor: '#0F172A' },
@@ -68,6 +72,9 @@ export default function DashboardPage({ role, ward }: DashboardPageProps) {
         </h1>
         <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>Wednesday, 5 August 2026</p>
       </div>
+
+      {isLoading && <LoadingPanel />}
+      {error && <ErrorPanel error={error} />}
 
       {/* Metric cards — no active border styling */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -267,13 +274,8 @@ export default function DashboardPage({ role, ward }: DashboardPageProps) {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             {filteredWards.map(w => {
-              const wardPatients = patients.filter(p => p.ward.includes(w.code));
+              const wardPatients = activePatients.filter(p => p.ward.includes(w.code));
               const pendingRx = wardPatients.reduce((s, p) => s + p.prescriptions.filter(rx => rx.status === 'active').length, 0);
-              const statusCounts = {
-                pending: w.sweepStatus === 'pending' ? w.activePatients : 0,
-                swept: w.sweepStatus === 'swept' ? w.activePatients : 0,
-                dispensed: w.sweepStatus === 'dispensed' ? w.activePatients : 0,
-              };
 
               const statusColor = w.sweepStatus === 'dispensed' ? '#16A34A'
                 : w.sweepStatus === 'swept' ? '#D97706'

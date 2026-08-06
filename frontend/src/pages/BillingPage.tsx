@@ -1,21 +1,7 @@
 import { useState } from 'react';
-import type { Transaction } from '../types';
+import { useBilling, useConfirmBilling } from '../api/billing';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import StatusPill from '../components/StatusPill';
-
-// TODO(Task 13): this page is not wired yet — useBilling lands in Task 13. This
-// placeholder stands in for the data.ts array this page used to read so the
-// frontend can typecheck and build without the mock file.
-const TRANSACTIONS: Transaction[] = [];
-
-// Group transactions by patient
-function groupByPatient(txns: Transaction[]) {
-  const map = new Map<string, { patient: string; ward: string; transactions: Transaction[] }>();
-  for (const t of txns) {
-    if (!map.has(t.patient)) map.set(t.patient, { patient: t.patient, ward: t.ward, transactions: [] });
-    map.get(t.patient)!.transactions.push(t);
-  }
-  return Array.from(map.values());
-}
 
 function CheckIcon() {
   return (
@@ -29,25 +15,22 @@ function CheckIcon() {
 export default function BillingPage() {
   const [wardFilter, setWardFilter] = useState('All');
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [patientBillState, setPatientBillState] = useState<Record<string, 'confirming' | 'billed'>>({});
+  // Local confirm step only; `billed` is server state.
+  const [confirming, setConfirming] = useState<string | null>(null);
 
-  const wards = ['All', ...Array.from(new Set(TRANSACTIONS.map(t => t.ward)))];
+  const { data, isLoading, error } = useBilling();
+  const confirmMutation = useConfirmBilling();
 
-  const filteredTxns = TRANSACTIONS.filter(t =>
-    wardFilter === 'All' || t.ward === wardFilter
-  );
+  const allGroups = data ?? [];
+  const wards = ['All', ...Array.from(new Set(allGroups.map(g => g.ward)))];
+  const groups = allGroups.filter(g => wardFilter === 'All' || g.ward === wardFilter);
 
-  const groups = groupByPatient(filteredTxns);
+  const grandTotal = groups.reduce((s, g) => s + g.total, 0);
+  const billedCount = groups.filter(g => g.billed).length;
 
-  const startConfirm = (name: string) =>
-    setPatientBillState(prev => ({ ...prev, [name]: 'confirming' }));
-  const cancelConfirm = (name: string) =>
-    setPatientBillState(prev => { const n = { ...prev }; delete n[name]; return n; });
-  const markBilled = (name: string) =>
-    setPatientBillState(prev => ({ ...prev, [name]: 'billed' }));
-
-  const grandTotal = groups.reduce((s, g) => s + g.transactions.reduce((ss, t) => ss + t.total, 0), 0);
-  const billedCount = groups.filter(g => patientBillState[g.patient] === 'billed').length;
+  const confirmBill = (patientId: string) => {
+    confirmMutation.mutate({ patientId }, { onSuccess: () => setConfirming(null) });
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1000 }}>
@@ -107,16 +90,18 @@ export default function BillingPage() {
           ))}
         </div>
 
+        {isLoading && <LoadingPanel />}
+        {error && <ErrorPanel error={error} />}
+
         {groups.map((group) => {
-          const state = patientBillState[group.patient];
-          const isBilled = state === 'billed';
-          const isConfirming = state === 'confirming';
-          const isExpanded = expanded === group.patient;
-          const groupTotal = group.transactions.reduce((s, t) => s + t.total, 0);
-          const pendingCount = group.transactions.filter(t => t.status === 'pending').length;
+          const isBilled = group.billed;
+          const isConfirming = confirming === group.patientId;
+          const isExpanded = expanded === group.patientId;
+          const groupTotal = group.total;
+          const pendingCount = group.pendingCount;
 
           return (
-            <div key={group.patient} style={{
+            <div key={group.patientId} style={{
               borderBottom: '1px solid #D9E8EF',
               background: isBilled ? '#FAFFFE' : 'transparent',
             }}>
@@ -128,7 +113,7 @@ export default function BillingPage() {
                 alignItems: 'center',
               }}>
                 <button
-                  onClick={() => setExpanded(isExpanded ? null : group.patient)}
+                  onClick={() => setExpanded(isExpanded ? null : group.patientId)}
                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
                 >
                   <span style={{
@@ -165,15 +150,15 @@ export default function BillingPage() {
                     </div>
                   ) : isConfirming ? (
                     <div style={{ display: 'flex', gap: 5 }}>
-                      <button onClick={() => cancelConfirm(group.patient)} style={ghostBtn}>Cancel</button>
-                      <button onClick={() => markBilled(group.patient)} style={confirmBtn}>Confirm Bill</button>
+                      <button onClick={() => setConfirming(null)} style={ghostBtn}>Cancel</button>
+                      <button onClick={() => confirmBill(group.patientId)} style={confirmBtn}>Confirm Bill</button>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {pendingCount > 0 && (
                         <StatusPill status="pending" label={`${pendingCount} pending`} />
                       )}
-                      <button onClick={() => startConfirm(group.patient)} style={billBtn}>
+                      <button onClick={() => setConfirming(group.patientId)} style={billBtn}>
                         Bill Patient
                       </button>
                     </div>
@@ -181,7 +166,7 @@ export default function BillingPage() {
                 </div>
 
                 <button
-                  onClick={() => setExpanded(isExpanded ? null : group.patient)}
+                  onClick={() => setExpanded(isExpanded ? null : group.patientId)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 11, textAlign: 'right', padding: 0 }}
                 >
                   {isExpanded ? '▲' : '▼'}

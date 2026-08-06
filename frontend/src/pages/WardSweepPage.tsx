@@ -1,36 +1,9 @@
 import { useState } from 'react';
-import type { Patient, Ward } from '../types';
+import { useWards } from '../api/wards';
+import { useDispense, usePickupList, useSweep } from '../api/indents';
+import { ErrorPanel, LoadingPanel } from '../components/AsyncState';
 import SweepBar from '../components/SweepBar';
 import StatusPill from '../components/StatusPill';
-
-// TODO(Task 13): this page is not wired yet — usePickupList/useDispense land in
-// Task 13. These placeholders stand in for the data.ts arrays and prop this page
-// used to read so the frontend can typecheck and build without the mock file.
-const WARDS: Ward[] = [];
-
-function buildPatientPickList(wardName: string, patients: Patient[]) {
-  return patients
-    .filter(p => p.ward === wardName)
-    .map(p => ({
-      patientId: p.id,
-      name: p.name,
-      mrn: p.mrn,
-      bed: p.bed,
-      medicines: p.prescriptions
-        .filter(rx => rx.status === 'active')
-        .map(rx => ({
-          drug: rx.drug,
-          dose: rx.dose,
-          route: rx.route,
-          frequency: rx.frequency,
-          foodTiming: rx.foodTiming,
-          timeOfDay: rx.timeOfDay,
-          treatmentDay: `Day ${rx.currentDay} of ${rx.durationDays}`,
-          qty: rx.timeOfDay.length || (rx.frequency === 'QDS' ? 4 : rx.frequency === 'TDS' ? 3 : rx.frequency === 'BD' ? 2 : 1),
-        })),
-    }))
-    .filter(p => p.medicines.length > 0);
-}
 
 function CheckIcon() {
   return (
@@ -42,16 +15,21 @@ function CheckIcon() {
 }
 
 export default function WardSweepPage() {
-  // TODO(Task 13): patients previously arrived as a prop; wire to a real hook.
-  const patients: Patient[] = [];
-  const [activeWardId, setActiveWardId] = useState(WARDS[0]?.id ?? '');
+  const { data: wards } = useWards();
+  const [activeWardId, setActiveWardId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  // per-patient dispense state: 'idle' | 'confirming' | 'dispensed'
-  const [patientState, setPatientState] = useState<Record<string, 'confirming' | 'dispensed'>>({});
+  // Only the confirm step is local. Whether a patient has been dispensed
+  // comes from the server.
+  const [confirming, setConfirming] = useState<string | null>(null);
 
-  const activeWard = WARDS.find(w => w.id === activeWardId) ?? null;
-  const rawPickList = activeWard ? buildPatientPickList(activeWard.code, patients) : [];
+  const wardId = activeWardId ?? wards?.[0]?.id ?? null;
+  const { data: pickup, isLoading, error } = usePickupList(wardId);
+  const dispenseMutation = useDispense();
+  const sweepMutation = useSweep();
+
+  const activeWard = (wards ?? []).find(w => w.id === wardId);
+  const rawPickList = pickup?.patients ?? [];
   const pickList = search
     ? rawPickList.filter(p =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -61,16 +39,11 @@ export default function WardSweepPage() {
       )
     : rawPickList;
 
-  const allDispensed = pickList.length > 0 && pickList.every(p => patientState[p.patientId] === 'dispensed');
+  const allDispensed = pickList.length > 0 && pickList.every(p => p.dispensed);
 
-  const dispense = (id: string) => setPatientState(prev => ({ ...prev, [id]: 'dispensed' }));
-  const startConfirm = (id: string) => setPatientState(prev => ({ ...prev, [id]: 'confirming' }));
-  const cancelConfirm = (id: string) => {
-    setPatientState(prev => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+  const dispense = (patientId: string) => {
+    if (!wardId) return;
+    dispenseMutation.mutate({ patientId, wardId }, { onSuccess: () => setConfirming(null) });
   };
 
   return (
@@ -84,18 +57,22 @@ export default function WardSweepPage() {
             Dispense and bill per patient
           </p>
         </div>
-        <button style={{
-          padding: '8px 16px',
-          border: '1px solid #D9E8EF',
-          borderRadius: 6,
-          background: '#fff',
-          color: '#0F172A',
-          fontSize: 13,
-          fontWeight: 500,
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}>
-          Trigger Sweep
+        <button
+          onClick={() => sweepMutation.mutate({ wardId: wardId ?? undefined })}
+          disabled={sweepMutation.isPending}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #D9E8EF',
+            borderRadius: 6,
+            background: '#fff',
+            color: '#0F172A',
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {sweepMutation.isPending ? 'Running sweep…' : 'Run sweep'}
         </button>
       </div>
 
@@ -116,19 +93,19 @@ export default function WardSweepPage() {
 
       {/* Ward tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #D9E8EF' }}>
-        {WARDS.map(ward => (
+        {(wards ?? []).map(ward => (
           <button
             key={ward.id}
-            onClick={() => { setActiveWardId(ward.id); setExpanded(null); setPatientState({}); }}
+            onClick={() => { setActiveWardId(ward.id); setExpanded(null); setConfirming(null); }}
             style={{
               padding: '10px 18px',
               borderTop: 'none',
               borderLeft: 'none',
               borderRight: 'none',
-              borderBottom: activeWardId === ward.id ? '2px solid #0AADA8' : '2px solid transparent',
+              borderBottom: wardId === ward.id ? '2px solid #0AADA8' : '2px solid transparent',
               background: 'transparent',
-              color: activeWardId === ward.id ? '#0AADA8' : '#64748B',
-              fontWeight: activeWardId === ward.id ? 600 : 400,
+              color: wardId === ward.id ? '#0AADA8' : '#64748B',
+              fontWeight: wardId === ward.id ? 600 : 400,
               fontSize: 13,
               cursor: 'pointer',
               fontFamily: 'inherit',
@@ -168,16 +145,18 @@ export default function WardSweepPage() {
           ))}
         </div>
 
-        {pickList.length === 0 && (
+        {isLoading && <LoadingPanel label="Loading pick list…" />}
+        {error && <ErrorPanel error={error} />}
+
+        {!isLoading && !error && pickList.length === 0 && (
           <div style={{ padding: '24px 20px', fontSize: 13, color: '#64748B', textAlign: 'center' }}>
             No active prescriptions for this ward today.
           </div>
         )}
 
         {pickList.map((patient) => {
-          const state = patientState[patient.patientId];
-          const isDispensed = state === 'dispensed';
-          const isConfirming = state === 'confirming';
+          const isDispensed = patient.dispensed;
+          const isConfirming = confirming === patient.patientId;
           const isExpanded = expanded === patient.patientId;
 
           return (
@@ -230,7 +209,7 @@ export default function WardSweepPage() {
                   ) : isConfirming ? (
                     <div style={{ display: 'flex', gap: 5 }}>
                       <button
-                        onClick={() => cancelConfirm(patient.patientId)}
+                        onClick={() => setConfirming(null)}
                         style={ghostBtn}
                       >
                         Cancel
@@ -244,7 +223,7 @@ export default function WardSweepPage() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => startConfirm(patient.patientId)}
+                      onClick={() => setConfirming(patient.patientId)}
                       style={dispenseBtn}
                     >
                       Dispense & Bill
@@ -281,10 +260,10 @@ export default function WardSweepPage() {
                 <div style={{ background: '#F0F9FB', padding: '0 20px 14px 44px' }}>
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 70px 60px 120px 100px 44px',
+                    gridTemplateColumns: '1fr 70px 60px 100px 100px 44px',
                     padding: '8px 0 6px',
                   }}>
-                    {['Drug / Times', 'Dose', 'Freq.', 'Food Timing', 'Day', 'Qty'].map((h, i) => (
+                    {['Drug', 'Dose', 'Route', 'Status', 'Day', 'Qty'].map((h, i) => (
                       <span key={i} style={{
                         fontSize: 11, color: '#64748B', fontWeight: 600,
                         textTransform: 'uppercase', letterSpacing: '0.03em',
@@ -294,33 +273,29 @@ export default function WardSweepPage() {
                       </span>
                     ))}
                   </div>
-                  {patient.medicines.map((med, mi) => {
-                    const FOOD: Record<string, string> = {
-                      'before-food': 'Before food', 'after-food': 'After food',
-                      'with-food': 'With food', 'not-applicable': '—',
-                    };
-                    return (
-                      <div key={mi} style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 70px 60px 120px 100px 44px',
-                        padding: '8px 0',
-                        borderTop: mi > 0 ? '1px solid #D9E8EF' : 'none',
-                        alignItems: 'center',
-                      }}>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>{med.drug}</div>
-                          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
-                            {med.timeOfDay.map((t: string) => t.charAt(0).toUpperCase() + t.slice(1)).join(', ')}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{med.dose}</span>
-                        <span style={{ fontSize: 12, color: '#64748B' }}>{med.frequency}</span>
-                        <span style={{ fontSize: 12, color: '#64748B' }}>{FOOD[med.foodTiming] ?? '—'}</span>
-                        <span style={{ fontSize: 12, color: '#64748B' }}>{med.treatmentDay}</span>
-                        <span style={{ fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', color: '#0F172A', textAlign: 'right' }}>{med.qty}</span>
+                  {patient.medicines.map((med, mi) => (
+                    <div key={med.lineId} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 70px 60px 100px 100px 44px',
+                      padding: '8px 0',
+                      borderTop: mi > 0 ? '1px solid #D9E8EF' : 'none',
+                      alignItems: 'center',
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: '#0F172A' }}>{med.drug}</div>
                       </div>
-                    );
-                  })}
+                      <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono, monospace', color: '#64748B' }}>{med.dose}</span>
+                      <span style={{ fontSize: 12, color: '#64748B' }}>{med.route}</span>
+                      <span style={{
+                        fontSize: 12,
+                        color: med.status === 'dispensed' ? '#16A34A' : med.status === 'cancelled' ? '#DC2626' : '#64748B',
+                      }}>
+                        {med.status.charAt(0).toUpperCase() + med.status.slice(1)}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#64748B' }}>Day {med.treatmentDay} of {med.durationDays}</span>
+                      <span style={{ fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', color: '#0F172A', textAlign: 'right' }}>{med.qty}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

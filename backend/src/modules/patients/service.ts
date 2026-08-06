@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client'
+import { Prisma, type PrismaClient } from '@prisma/client'
 import type { CreatePatientRequest, Patient, PatientListQuery, SessionUser } from '@pharmassist/shared'
 import { ErrorCode } from '@pharmassist/shared'
 import { AppError } from '../../errors'
@@ -17,6 +17,10 @@ const patientInclude = {
  * A nurse may only reach their own ward. Denying rather than filtering
  * matters: a filtered-empty result is indistinguishable from "no such
  * patient", and a 404 would leak whether the record exists.
+ *
+ * For any non-nurse role this is a no-op, and in all cases it never
+ * validates that `wardId` actually exists — callers are responsible for
+ * checking the ward exists themselves.
  */
 export function assertWardAccess(viewer: SessionUser, wardId: string): void {
   if (viewer.role !== 'nurse') return
@@ -98,21 +102,31 @@ export async function createPatient(
   if (!ward) throw AppError.invalidInput(`No ward found with id ${input.wardId}`)
 
   const created = await prisma.$transaction(async (tx) => {
-    const patient = await tx.patient.create({
-      data: {
-        mrn: await nextMrn(tx),
-        name: input.name,
-        dateOfBirth: new Date(input.dateOfBirth),
-        gender: input.gender,
-        phone: input.phone,
-        wardId: input.wardId,
-        bed: input.bed,
-        admissionDate: new Date(input.admissionDate),
-        diagnosis: input.diagnosis,
-        allergies: input.allergies,
-      },
-      include: patientInclude,
-    })
+    const patient = await tx.patient
+      .create({
+        data: {
+          mrn: await nextMrn(tx),
+          name: input.name,
+          dateOfBirth: new Date(input.dateOfBirth),
+          gender: input.gender,
+          phone: input.phone,
+          wardId: input.wardId,
+          bed: input.bed,
+          admissionDate: new Date(input.admissionDate),
+          diagnosis: input.diagnosis,
+          allergies: input.allergies,
+        },
+        include: patientInclude,
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw AppError.conflict(
+            ErrorCode.DATABASE_ERROR,
+            'MRN was allocated concurrently by another registration; please retry',
+          )
+        }
+        throw error
+      })
 
     await tx.activityEvent.create({
       data: {

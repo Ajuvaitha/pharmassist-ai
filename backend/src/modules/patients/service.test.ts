@@ -4,6 +4,7 @@ import { getTestPrisma, resetDatabase } from '../../test/db'
 import { AppError } from '../../errors'
 import { createPatient, getPatient, listPatients } from './service'
 import type { SessionUser } from '@pharmassist/shared'
+import { ErrorCode } from '@pharmassist/shared'
 
 const prisma = getTestPrisma()
 
@@ -53,8 +54,10 @@ describe('listPatients', () => {
 
   it('rejects a nurse asking for another ward', async () => {
     const otherWard = await prisma.ward.findUniqueOrThrow({ where: { code: 'Ward 5B' } })
-    await expect(listPatients(prisma, await viewerFor('a.owusu'), { wardId: otherWard.id }))
-      .rejects.toBeInstanceOf(AppError)
+    const error = await listPatients(prisma, await viewerFor('a.owusu'), { wardId: otherWard.id }).catch((e) => e)
+
+    expect(error).toBeInstanceOf(AppError)
+    expect(error.statusCode).toBe(403)
   })
 })
 
@@ -121,7 +124,44 @@ describe('createPatient', () => {
 
   it('denies a nurse registering into another ward', async () => {
     const other = await prisma.ward.findUniqueOrThrow({ where: { code: 'Ward 6C' } })
-    await expect(createPatient(prisma, await viewerFor('a.owusu'), { ...input, wardId: other.id }))
-      .rejects.toBeInstanceOf(AppError)
+    const error = await createPatient(prisma, await viewerFor('a.owusu'), { ...input, wardId: other.id }).catch(
+      (e) => e,
+    )
+
+    expect(error).toBeInstanceOf(AppError)
+    expect(error.statusCode).toBe(403)
+  })
+
+  it('labels a concurrent MRN collision as a conflict instead of surfacing a raw 500', async () => {
+    const ward = await prisma.ward.findUniqueOrThrow({ where: { code: 'Ward 4A' } })
+
+    // nextMrn() formats MRN-<count+1>. Occupy the MRN that the upcoming
+    // createPatient call will compute, so its insert collides on the
+    // unique `mrn` column exactly as a second concurrent caller would.
+    const count = await prisma.patient.count()
+    const collidingMrn = `MRN-${String(count + 2).padStart(6, '0')}`
+    await prisma.patient.create({
+      data: {
+        mrn: collidingMrn,
+        name: 'Placeholder Patient',
+        dateOfBirth: new Date('1990-01-01'),
+        gender: 'Female',
+        phone: '+233 20 000 0000',
+        wardId: ward.id,
+        bed: 'Bed 99',
+        admissionDate: new Date('2026-08-06'),
+        diagnosis: 'n/a',
+        allergies: 'n/a',
+      },
+    })
+
+    const error = await createPatient(prisma, await viewerFor('a.owusu'), { ...input, wardId: ward.id }).catch(
+      (e) => e,
+    )
+
+    expect(error).toBeInstanceOf(AppError)
+    expect(error.statusCode).toBe(409)
+    expect(error.code).toBe(ErrorCode.DATABASE_ERROR)
+    expect(error.message).toMatch(/concurrently|retry/i)
   })
 })

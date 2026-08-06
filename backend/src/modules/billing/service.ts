@@ -3,6 +3,7 @@ import { ErrorCode, type ConfirmBillingRequest, type PatientBillingGroup, type S
 import { AppError } from '../../errors'
 import { decimalToNumber, toTransactionDto } from '../../domain/dto'
 import { assertWardAccess } from '../patients/service'
+import { startOfUtcDay } from '../../domain/dates'
 
 const lineInclude = {
   patient: true,
@@ -70,7 +71,7 @@ export async function listBilling(
   const lines = await prisma.billingLine.findMany({
     where: {
       ...scopeFor(viewer, query.wardId),
-      ...(query.date ? { indentLine: { indent: { indentDate: query.date } } } : {}),
+      ...(query.date ? { indentLine: { indent: { indentDate: startOfUtcDay(query.date) } } } : {}),
     },
     include: lineInclude,
     orderBy: { createdAt: 'desc' },
@@ -95,7 +96,7 @@ export async function confirmBilling(
 
   const where: Prisma.BillingLineWhereInput = {
     patientId: input.patientId,
-    ...(input.date ? { indentLine: { indent: { indentDate: input.date } } } : {}),
+    ...(input.date ? { indentLine: { indent: { indentDate: startOfUtcDay(input.date) } } } : {}),
   }
 
   const existing = await prisma.billingLine.findMany({ where, include: lineInclude })
@@ -106,12 +107,20 @@ export async function confirmBilling(
     throw AppError.conflict(ErrorCode.ALREADY_BILLED, `${patient.name}'s account was already billed`)
   }
 
-  await prisma.billingLine.updateMany({
+  // Conditional on still-pending rather than a blind update. Two concurrent
+  // confirms for the same patient can both pass the pre-check above off the
+  // same read; the loser must land here as a labelled conflict instead of
+  // silently matching zero rows and reporting success on money it never
+  // touched.
+  const updated = await prisma.billingLine.updateMany({
     where: { ...where, status: 'pending' },
     data: { status: 'billed', billedById: actor.id, billedAt: new Date() },
   })
+  if (updated.count === 0) {
+    throw AppError.conflict(ErrorCode.ALREADY_BILLED, `${patient.name}'s account was already billed`)
+  }
 
-  const updated = await prisma.billingLine.findMany({ where, include: lineInclude })
-  const [result] = group(updated)
+  const updatedLines = await prisma.billingLine.findMany({ where, include: lineInclude })
+  const [result] = group(updatedLines)
   return result
 }

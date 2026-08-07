@@ -75,3 +75,29 @@ export const activityQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).default(50),
 })
 export type ActivityQuery = z.infer<typeof activityQuerySchema>
+
+export type MatchType =
+  | 'exact'
+  | 'brand'
+  | 'prefix'
+  | 'substring'
+  | 'token'
+  | 'phonetic'
+  | 'fuzzy'
+
+export interface DrugSearchResult {
+  id: string
+  label: string
+  name: string
+  strength: string
+  form: string
+  matchType: MatchType
+  /** Lower is a better match; used only for ordering. */
+  score: number
+}
+
+export const drugSearchQuerySchema = z.object({
+  q: z.string().trim().min(1, 'A search query is required'),
+  limit: z.coerce.number().int().positive().default(8).transform(v => Math.min(v, 25)),
+})
+export type DrugSearchQuery = z.infer<typeof drugSearchQuerySchema>

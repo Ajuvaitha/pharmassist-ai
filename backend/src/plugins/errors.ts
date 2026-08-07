@@ -18,24 +18,6 @@ function envelope(error: ErrorCode, message: string): ApiErrorBody {
   return { success: false, error, message }
 }
 
-/**
- * @fastify/rate-limit's errorResponseBuilder result is thrown directly by
- * the plugin rather than raised as an Error, so it arrives here as a plain
- * object. It already carries our envelope shape plus the statusCode the
- * rate limiter computed (429, or 403 once banned) — recognize and forward
- * it rather than falling through to the generic internal-error branch.
- */
-function isEnvelopeError(error: unknown): error is ApiErrorBody & { statusCode: number } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'success' in error &&
-    error.success === false &&
-    'statusCode' in error &&
-    typeof (error as { statusCode: unknown }).statusCode === 'number'
-  )
-}
-
 const errorsPlugin: FastifyPluginAsync = async (app) => {
   app.setNotFoundHandler((request, reply) => {
     reply
@@ -47,11 +29,6 @@ const errorsPlugin: FastifyPluginAsync = async (app) => {
   })
 
   app.setErrorHandler((error: Error & { statusCode?: number; validation?: unknown[] }, request, reply) => {
-    if (isEnvelopeError(error)) {
-      reply.status(error.statusCode).send(envelope(error.error, error.message))
-      return
-    }
-
     if (error instanceof AppError) {
       reply.status(error.statusCode).send(envelope(error.code, error.message))
       return

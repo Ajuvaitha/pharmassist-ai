@@ -8,7 +8,11 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     '/api/auth/login',
     {
       config: {
-        rateLimit: { max: 10, timeWindow: '1 minute' },
+        // Keyed per-username (see security.ts's keyGenerator), so this is
+        // the allowance for one person, not the whole site. High enough
+        // that a real clinician typo-ing a password will not hit it, low
+        // enough to slow a guesser.
+        rateLimit: { max: 20, timeWindow: '1 minute' },
       },
     },
     async (request, reply): Promise<LoginResponse> => {

@@ -55,4 +55,25 @@ describe('loadEnv', () => {
   it('rejects a CORS_ORIGIN of "*"', () => {
     expect(() => loadEnv({ ...valid, CORS_ORIGIN: '*' })).toThrow(/CORS_ORIGIN/)
   })
+
+  it('rejects a CORS_ORIGIN of "*," — a wildcard segment plus a trailing comma', () => {
+    expect(() => loadEnv({ ...valid, CORS_ORIGIN: '*,' })).toThrow(/CORS_ORIGIN/)
+  })
+
+  it('rejects a CORS_ORIGIN of " * " — a wildcard segment padded with whitespace', () => {
+    expect(() => loadEnv({ ...valid, CORS_ORIGIN: ' * ' })).toThrow(/CORS_ORIGIN/)
+  })
+
+  it('rejects a CORS_ORIGIN with a real origin followed by a wildcard segment', () => {
+    expect(() => loadEnv({ ...valid, CORS_ORIGIN: 'https://good.example,*' }))
+      .toThrow(/CORS_ORIGIN/)
+  })
+
+  it('accepts a comma-separated CORS_ORIGIN and parses exactly two origins', () => {
+    const env = loadEnv({
+      ...valid,
+      CORS_ORIGIN: 'https://a.example, https://b.example',
+    })
+    expect(env.CORS_ORIGINS).toEqual(['https://a.example', 'https://b.example'])
+  })
 })

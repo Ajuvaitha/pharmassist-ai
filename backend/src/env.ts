@@ -1,5 +1,18 @@
 import { z } from 'zod'
 
+/**
+ * Splits a comma-separated CORS_ORIGIN into trimmed, non-empty segments.
+ * Shared by the validator below and exposed on the parsed Env so callers
+ * never re-parse the raw string themselves.
+ */
+function parseCorsOrigins(raw: string | undefined): string[] {
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0)
+}
+
 const envSchema = z
   .object({
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -26,10 +39,11 @@ const envSchema = z
       })
     }
   })
-  .refine((env) => env.CORS_ORIGIN !== '*', {
-    message: 'CORS_ORIGIN must not be "*" — a wildcard cannot be combined with credentials',
+  .refine((env) => !parseCorsOrigins(env.CORS_ORIGIN).includes('*'), {
+    message: 'CORS_ORIGIN must not contain "*" — a wildcard cannot be combined with credentials',
     path: ['CORS_ORIGIN'],
   })
+  .transform((env) => ({ ...env, CORS_ORIGINS: parseCorsOrigins(env.CORS_ORIGIN) }))
 
 export type Env = z.infer<typeof envSchema>
 

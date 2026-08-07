@@ -10,6 +10,7 @@ export const ErrorCode = {
   ALREADY_BILLED: 'ALREADY_BILLED',
   DATABASE_ERROR: 'DATABASE_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]

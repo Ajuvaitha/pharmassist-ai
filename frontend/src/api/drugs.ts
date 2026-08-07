@@ -15,12 +15,15 @@ export function useDrugs(search?: string) {
   })
 }
 
-export function useDrugSearch(q: string) {
+export function useDrugSearch(q: string, opts: { refetchInterval?: number } = {}) {
   const query = q.trim()
   return useQuery<DrugSearchResult[]>({
     queryKey: drugSearchQueryKey(query),
     queryFn: () => apiGet<DrugSearchResult[]>(`/api/drugs/search${buildQuery({ q: query, limit: 8 })}`),
     enabled: query.length >= 2,
-    staleTime: 60_000,
+    staleTime: 0,
+    // The suggestion side-panel polls live while a word is being written, so
+    // the list keeps tracking the latest recognized text.
+    refetchInterval: opts.refetchInterval,
   })
 }

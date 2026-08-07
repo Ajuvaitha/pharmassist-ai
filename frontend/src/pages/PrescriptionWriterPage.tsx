@@ -25,7 +25,7 @@ export default function PrescriptionWriterPage() {
   const [confirmed, setConfirmed] = useState<DrugSearchResult | null>(null) // opens Popup 2
   const [savedCount, setSavedCount] = useState(0)
 
-  const searchQuery = useDrugSearch(query)
+  const searchQuery = useDrugSearch(query, { refetchInterval: showSuggest ? 400 : undefined })
 
   const onRecognize = useCallback((text: string) => {
     if (!text.trim()) return

@@ -194,6 +194,56 @@ export async function runSweep(prisma: PrismaClient, opts: SweepOptions = {}): P
   return { date: toDateString(date), preview, wards: results }
 }
 
+/**
+ * Places a freshly written prescription onto today's indent so the
+ * pharmacist can dispense it without waiting for the next 06:00 sweep or a
+ * manual "Run sweep". This is the single-prescription mirror of runSweep:
+ * same planLinesFor rule, same upsert, same P2002 handling.
+ *
+ * Called AFTER the create transaction commits — never inside it — so a
+ * P2002 from a concurrent sweep can be caught and the winner's indent
+ * re-read, exactly as runSweep does. A failure here leaves the prescription
+ * created but off today's list; the next sweep reconciles it.
+ *
+ * Does nothing when the prescription is not due today (PRN/STAT, wrong
+ * schedule day, or outside its treatment window) or when today's indent is
+ * already `dispensed` — that ward has collected its meds and this dose
+ * belongs to tomorrow's sweep, matching runSweep's own guard.
+ */
+export async function enqueuePrescription(
+  prisma: PrismaClient,
+  prescription: Parameters<typeof planLinesFor>[0][number] & { wardId: string },
+  date: Date = todayUtc(),
+): Promise<void> {
+  const day = startOfUtcDay(date)
+  const planned = planLinesFor([prescription], day)
+  if (planned.length === 0) return
+
+  const indent = await prisma.dailyIndent
+    .upsert({
+      where: { wardId_indentDate: { wardId: prescription.wardId, indentDate: day } },
+      update: {},
+      create: { wardId: prescription.wardId, indentDate: day, status: 'swept' },
+    })
+    .catch(async (error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return prisma.dailyIndent.findUniqueOrThrow({
+          where: { wardId_indentDate: { wardId: prescription.wardId, indentDate: day } },
+        })
+      }
+      throw error
+    })
+
+  // A prescription written after the ward already collected its medication
+  // for the day must not land in a closed indent — same guard as runSweep.
+  if (indent.status === 'dispensed') return
+
+  await prisma.indentLine.createMany({
+    data: planned.map((line) => ({ ...line, indentId: indent.id })),
+    skipDuplicates: true,
+  })
+}
+
 export async function getPickupList(
   prisma: PrismaClient,
   viewer: SessionUser,

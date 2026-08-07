@@ -11,7 +11,7 @@ import { toFoodTimingEnum } from '../../domain/enums'
 import { toPrescriptionDto } from '../../domain/dto'
 import { parseIsoDate, todayUtc } from '../../domain/dates'
 import { assertWardAccess } from '../../domain/scoping'
-import { closeIndentIfComplete } from '../indents/service'
+import { closeIndentIfComplete, enqueuePrescription } from '../indents/service'
 
 const rxInclude = { drug: true, prescribedBy: true } satisfies Prisma.PrescriptionInclude
 
@@ -61,6 +61,23 @@ export async function createPrescription(
 
     return rx
   })
+
+  // Post-commit, mirroring stopPrescription's closeIndentIfComplete: put the
+  // new prescription on today's indent so the pharmacist sees it without a
+  // manual sweep. Kept out of the transaction so a P2002 from a concurrent
+  // sweep can be caught and re-read.
+  await enqueuePrescription(
+    prisma,
+    {
+      id: created.id,
+      patientId: created.patientId,
+      drugId: created.drugId,
+      frequency: created.frequency,
+      startDate: created.startDate,
+      durationDays: created.durationDays,
+      wardId: patient.wardId,
+    },
+  )
 
   return toPrescriptionDto(created)
 }

@@ -4,7 +4,8 @@ import { getTestPrisma, resetDatabase } from '../../test/db'
 import { AppError } from '../../errors'
 import { createPrescription, stopPrescription, updatePrescription } from './service'
 import { listDrugs } from '../drugs/service'
-import { todayUtc } from '../../domain/dates'
+import { getPickupList } from '../indents/service'
+import { todayUtc, toDateString } from '../../domain/dates'
 import type { SessionUser } from '@pharmassist/shared'
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
@@ -91,6 +92,59 @@ describe('createPrescription', () => {
 
     const event = await prisma.activityEvent.findFirstOrThrow({ where: { type: 'prescription' } })
     expect(event.text).toContain('Ibuprofen 400mg')
+  })
+
+  it('places a due prescription on today\'s pickup list without a manual sweep', async () => {
+    const patient = await prisma.patient.findFirstOrThrow({
+      where: { status: 'admitted' },
+      include: { ward: true },
+    })
+    const drug = await prisma.drug.findUniqueOrThrow({ where: { label: 'Ibuprofen 400mg' } })
+    const input = {
+      drugId: drug.id,
+      dose: '400mg',
+      route: 'Oral' as const,
+      frequency: 'OD' as const,
+      foodTiming: 'after-food' as const,
+      timeOfDay: ['morning' as const],
+      startDate: toDateString(todayUtc()),
+      durationDays: 5,
+    }
+
+    const rx = await createPrescription(prisma, await viewerFor('b.kwame'), patient.id, input)
+
+    const pickup = await getPickupList(prisma, await viewerFor('k.asante'), patient.wardId)
+    const entry = pickup.patients.find((p) => p.patientId === patient.id)
+    expect(entry).toBeDefined()
+    expect(entry?.medicines.some((m) => m.drug === 'Ibuprofen 400mg' && m.status === 'pending')).toBe(true)
+    expect(rx.status).toBe('active')
+  })
+
+  it('does not add to an indent already dispensed', async () => {
+    const patient = await prisma.patient.findFirstOrThrow({
+      where: { status: 'admitted' },
+      include: { ward: true },
+    })
+    await prisma.dailyIndent.create({
+      data: { wardId: patient.wardId, indentDate: todayUtc(), status: 'dispensed' },
+    })
+    const drug = await prisma.drug.findUniqueOrThrow({ where: { label: 'Ibuprofen 400mg' } })
+
+    await createPrescription(prisma, await viewerFor('b.kwame'), patient.id, {
+      drugId: drug.id,
+      dose: '400mg',
+      route: 'Oral' as const,
+      frequency: 'OD' as const,
+      foodTiming: 'after-food' as const,
+      timeOfDay: ['morning' as const],
+      startDate: toDateString(todayUtc()),
+      durationDays: 5,
+    })
+
+    const lines = await prisma.indentLine.count({
+      where: { indent: { wardId: patient.wardId, indentDate: todayUtc() } },
+    })
+    expect(lines).toBe(0)
   })
 })
 

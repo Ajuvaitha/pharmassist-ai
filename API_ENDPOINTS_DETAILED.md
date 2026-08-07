@@ -8,6 +8,13 @@ against a live server seeded with `backend/prisma/seed-data.ts`. Nothing
 here is invented — if the app changes, run `pnpm --filter @pharmassist/backend
 routes` again and diff it against the summary table below.
 
+**Record ids in the examples are instance-specific.** Values such as
+`cmsh37hx40000g2ev58fa6f2g` are real cuids captured from one seeded
+database; a fresh `pnpm --filter @pharmassist/backend seed` generates
+different ones. Read them as shapes, not as fixtures — fetch the id you
+need from the corresponding list endpoint rather than copying one from
+here.
+
 ## 1. Base URL and authentication
 
 Base URL (development): `http://localhost:3000`. All routes are under `/api`.
@@ -569,9 +576,11 @@ An unmatched route (wrong path or method) returns `404 NOT_FOUND` with
 
 ## 7. Money
 
-Monetary values (`unitPrice`, `total`) are **JSON numbers with two decimal
-places** (e.g. `0.85`, `3.77`), computed server-side from `Decimal`
+Monetary values (`unitPrice`, `total`) are **JSON numbers at cent
+precision** (e.g. `0.85`, `3.77`), computed server-side from `Decimal(10,2)`
 columns — never a string, never a float the client is expected to round.
+Note that JSON drops a trailing zero, so a stored `1.20` arrives as `1.2`;
+format for display on the client rather than assuming two printed digits.
 The currency is **GHS (Ghanaian cedi)** for every value in this API; it is
 not carried in the payload, so an integrator hard-codes it rather than
 looking for a `currency` field.

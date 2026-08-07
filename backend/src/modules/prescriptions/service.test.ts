@@ -155,6 +155,14 @@ describe('updatePrescription', () => {
     expect(updated.durationDays).toBe(21)
   })
 
+  it('stamps editedAt on edit (null before)', async () => {
+    const rx = await prisma.prescription.findFirstOrThrow({ where: { status: 'active' } })
+    expect(rx.editedAt).toBeNull()
+
+    const updated = await updatePrescription(prisma, await viewerFor('b.kwame'), rx.id, { dose: '250mg' })
+    expect(updated.editedAt).not.toBeNull()
+  })
+
   it('refuses to edit a stopped prescription', async () => {
     const rx = await prisma.prescription.findFirstOrThrow({ where: { status: 'stopped' } })
     await expect(updatePrescription(prisma, await viewerFor('b.kwame'), rx.id, { durationDays: 3 }))

@@ -74,6 +74,7 @@ describe('toPrescriptionDto', () => {
     stopReason: null,
     notes: null,
     prescribedAt: new Date('2026-08-01T08:15:00Z'),
+    editedAt: null,
     drug: { label: 'Amoxicillin 500mg' },
     prescribedBy: { displayName: 'Dr. B. Kwame' },
   }

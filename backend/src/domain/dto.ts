@@ -43,6 +43,7 @@ type PrescriptionRow = {
   stopReason: string | null
   notes: string | null
   prescribedAt: Date
+  editedAt: Date | null
   drug: { label: string }
   prescribedBy: { displayName: string }
 }
@@ -74,6 +75,7 @@ export function toPrescriptionDto(rx: PrescriptionRow, on: Date = todayUtc()): P
     ...(rx.notes ? { notes: rx.notes } : {}),
     prescribedBy: rx.prescribedBy.displayName,
     prescribedAt: rx.prescribedAt.toISOString(),
+    editedAt: rx.editedAt?.toISOString() ?? null,
   }
 }
 

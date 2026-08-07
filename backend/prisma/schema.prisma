@@ -217,6 +217,9 @@ model Prescription {
   prescribedById String
   prescribedBy   User               @relation("PrescribedBy", fields: [prescribedById], references: [id])
   prescribedAt   DateTime           @default(now())
+  // Set only by an edit (updatePrescription), never on create. Null means
+  // "never edited" — what drives the "Updated" tag in the UI.
+  editedAt       DateTime?
   stoppedById    String?
   stoppedBy      User?              @relation("StoppedBy", fields: [stoppedById], references: [id])
   stoppedAt      DateTime?

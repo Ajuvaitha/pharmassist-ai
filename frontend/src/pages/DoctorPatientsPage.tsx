@@ -284,6 +284,17 @@ function RxDetailRow({ rx, last, onEdit, dimmed }: {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {rx.editedAt && rx.status === 'active' && (
+            <span
+              title={`Edited ${new Date(rx.editedAt).toLocaleString('en-GB')}`}
+              style={{
+                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                background: '#FEF3C7', color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}
+            >
+              Updated
+            </span>
+          )}
           <StatusPill status={rx.status} />
           {onEdit && rx.status === 'active' && (
             <button onClick={onEdit} style={{

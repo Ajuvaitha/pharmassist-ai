@@ -127,6 +127,7 @@ export async function updatePrescription(
         ...(input.startDate ? { startDate: parseIsoDate(input.startDate) } : {}),
         ...(input.durationDays ? { durationDays: input.durationDays } : {}),
         ...(input.notes === undefined ? {} : { notes: input.notes || null }),
+        editedAt: new Date(),
       },
       include: rxInclude,
     })

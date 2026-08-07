@@ -53,6 +53,8 @@ export interface Prescription {
   notes?: string
   prescribedBy: string
   prescribedAt: string
+  /** ISO timestamp of the last edit, or null if never edited. */
+  editedAt: string | null
 }
 
 export interface Patient {

@@ -64,9 +64,12 @@ export default function DoctorPatientsPage({ doctorName }: DoctorPatientsPagePro
     : [];
 
   return (
-    <div style={{ display: 'flex', gap: 20, height: 'calc(100vh - 100px)', maxWidth: 1100 }}>
-      {/* Patient list */}
-      <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', gap: 20, maxWidth: 1100, alignItems: 'flex-start' }}>
+      {/* Patient list — sticky so it stays put while the page scrolls */}
+      <div style={{
+        width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12,
+        position: 'sticky', top: 0, maxHeight: 'calc(100vh - 100px)',
+      }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.3px' }}>
             Patients
@@ -87,8 +90,8 @@ export default function DoctorPatientsPage({ doctorName }: DoctorPatientsPagePro
         {error && <ErrorPanel error={error} />}
 
         <div style={{
-          flex: 1, overflowY: 'auto',
-          background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, overflow: 'hidden',
+          flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
+          background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8,
         }}>
           {filtered.length === 0 && (
             <div style={{ padding: '20px 16px', fontSize: 13, color: '#64748B', textAlign: 'center' }}>
@@ -136,7 +139,7 @@ export default function DoctorPatientsPage({ doctorName }: DoctorPatientsPagePro
 
       {/* Detail panel */}
       {selectedPatient ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           {/* Patient header */}
           <div style={{ background: '#fff', border: '1px solid #D9E8EF', borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

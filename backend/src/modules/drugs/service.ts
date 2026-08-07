@@ -6,8 +6,11 @@ export async function listDrugs(prisma: PrismaClient, search?: string): Promise<
   const term = search?.trim()
 
   const drugs = await prisma.drug.findMany({
-    where: term ? { label: { contains: term, mode: 'insensitive' } } : {},
+    where: term
+      ? { label: { contains: term, mode: 'insensitive' } }
+      : { inventoryItem: { isNot: null } },
     orderBy: { label: 'asc' },
+    take: 100,
   })
 
   return drugs.map((drug) => ({

@@ -1,5 +1,17 @@
 # Pharmassist - Project Information & Technical Specification
 
+> **Superseded — historical design brief.** This document describes the
+> system as originally envisaged, before it was built. Its field names are
+> not the ones that shipped: it uses `daily_dosage_qty`, `total_prescribed_days`
+> and `ACTIVE | COMPLETED | CANCELLED`, where the implementation derives
+> quantity from the dosing frequency and uses `active | stopped | completed`.
+>
+> For the API as it actually exists, read [API_ENDPOINTS_DETAILED.md](API_ENDPOINTS_DETAILED.md).
+> For how the daily dispensing cycle works, read
+> [INPATIENT_AUTO_INDENT_MODULE_SPEC.md](INPATIENT_AUTO_INDENT_MODULE_SPEC.md).
+> Kept for the product context and rationale in the sections below, which
+> remain accurate.
+
 ## 1. Project Overview
 
 **Pharmassist** (`pharmassist-ai`) is an AI-powered smart pharmacy and hospital logistics platform designed to optimize inpatient medication dispensing, streamline prescription workflows, automate daily ward requisitions, and track pharmacy billing and inventory.

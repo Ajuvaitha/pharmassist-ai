@@ -33,6 +33,10 @@ export default function PrescriptionWriterPage() {
     setShowSuggest(true)
   }, [])
 
+  const handleWordSettled = useCallback((w: { label: string; box: { x: number; y: number; width: number; height: number } }) => {
+    onRecognize(w.label)
+  }, [onRecognize])
+
   const handleSelectCandidate = (r: DrugSearchResult) => {
     setShowSuggest(false)
     setConfirmed(r)               // open Popup 2 (details)
@@ -77,7 +81,7 @@ export default function PrescriptionWriterPage() {
       <div style={{ opacity: patientId ? 1 : 0.5, pointerEvents: patientId ? 'auto' : 'none' }}>
         {mode === 'speak'
           ? <VoiceAgent onRecognize={onRecognize} />
-          : <Whiteboard onWordSettled={(w) => onRecognize(w.label)} />}
+          : <Whiteboard onWordSettled={handleWordSettled} />}
       </div>
 
       {savedCount > 0 && (

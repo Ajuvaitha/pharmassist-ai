@@ -1,4 +1,5 @@
 import type { Role, Page } from '../types';
+import ChatAssistant from './ChatAssistant';
 
 function GridIcon() {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/></svg>;
@@ -82,6 +83,7 @@ export default function Layout({ role, page, user, ward, onNavigate, children }:
   const roleStyle = ROLE_COLORS[role];
 
   return (
+    <>
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#E8F3F8' }}>
       {/* Sidebar */}
       <aside style={{
@@ -249,5 +251,7 @@ export default function Layout({ role, page, user, ward, onNavigate, children }:
         </main>
       </div>
     </div>
+    <ChatAssistant />
+    </>
   );
 }

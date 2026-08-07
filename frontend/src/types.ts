@@ -34,3 +34,4 @@ export type Page =
   | 'register-patient'
   | 'doctor-patients'
   | 'doctor'
+  | 'prescription-writer'

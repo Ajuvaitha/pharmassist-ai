@@ -29,6 +29,7 @@ const NAV_NURSE: NavItem[] = [
 
 const NAV_DOCTOR: NavItem[] = [
   { page: 'doctor-patients', label: 'Patients', icon: <PatientsIcon /> },
+  { page: 'prescription-writer', label: 'Prescription Writer', icon: <PenIcon /> },
   { page: 'doctor', label: 'My Prescriptions', icon: <DocIcon /> },
 ];
 
@@ -248,6 +249,9 @@ function LedgerIcon() {
 }
 function DocIcon() {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M4 2h7a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" strokeWidth="1.3"/><path d="M5 5.5h5M5 7.5h5M5 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
+}
+function PenIcon() {
+  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M9.5 2.5l3 3-7.5 7.5H2v-3l7.5-7.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M8 4l3 3" stroke="currentColor" strokeWidth="1.3"/></svg>;
 }
 function AddPersonIcon() {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="6.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M1 13c0-2.761 2.239-5 5.5-5 1.27 0 2.44.43 3.37 1.15" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><path d="M11.5 9.5v4M9.5 11.5h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;

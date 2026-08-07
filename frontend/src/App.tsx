@@ -12,6 +12,7 @@ import RegisterPatientPage from './pages/RegisterPatientPage';
 import DoctorPatientsPage from './pages/DoctorPatientsPage';
 import DoctorPage from './pages/DoctorPage';
 import RecentActivityPage from './pages/RecentActivityPage';
+import PrescriptionWriterPage from './pages/PrescriptionWriterPage';
 import Layout from './components/Layout';
 
 export default function App() {
@@ -73,6 +74,8 @@ export default function App() {
         return <DoctorPatientsPage doctorName={user} />;
       case 'doctor':
         return <DoctorPage />;
+      case 'prescription-writer':
+        return <PrescriptionWriterPage />;
       case 'recent-activity':
         return <RecentActivityPage />;
       default:

@@ -180,6 +180,7 @@ export default function InventoryPage() {
             <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>{restocking.drug}</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {restockMutation.isError && <ErrorPanel error={restockMutation.error} />}
               <div>
                 <label style={mLabel}>Quantity ({restocking.unit}s)</label>
                 <input

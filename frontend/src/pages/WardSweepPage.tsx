@@ -39,7 +39,10 @@ export default function WardSweepPage() {
       )
     : rawPickList;
 
-  const allDispensed = pickList.length > 0 && pickList.every(p => p.dispensed);
+  // Computed from the UNFILTERED list — pickList is search-filtered, and a
+  // search that happens to match only already-dispensed patients must not
+  // make the ward look complete while pending patients sit off-screen.
+  const allDispensed = rawPickList.length > 0 && rawPickList.every(p => p.dispensed);
 
   const dispense = (patientId: string) => {
     if (!wardId) return;
@@ -252,6 +255,14 @@ export default function WardSweepPage() {
                   color: '#0F172A',
                 }}>
                   Dispense <strong>{patient.medicines.length} prescription line{patient.medicines.length !== 1 ? 's' : ''}</strong> for <strong>{patient.name}</strong> and auto-bill to their account?
+                </div>
+              )}
+
+              {/* Dispense failure — surfaced right where the pharmacist is
+                  looking, since onSuccess never fires to close the modal. */}
+              {isConfirming && dispenseMutation.isError && (
+                <div style={{ margin: '0 20px 12px' }}>
+                  <ErrorPanel error={dispenseMutation.error} />
                 </div>
               )}
 

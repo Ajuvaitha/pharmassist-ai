@@ -188,6 +188,14 @@ export default function BillingPage() {
                 </div>
               )}
 
+              {/* Bill-confirm failure — surfaced right where the user is
+                  looking, since onSuccess never fires to close the modal. */}
+              {isConfirming && confirmMutation.isError && (
+                <div style={{ margin: '0 20px 12px' }}>
+                  <ErrorPanel error={confirmMutation.error} />
+                </div>
+              )}
+
               {/* Expanded transaction lines */}
               {isExpanded && (
                 <div style={{ background: '#F0F9FB', padding: '0 20px 14px 44px' }}>

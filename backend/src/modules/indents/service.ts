@@ -413,10 +413,24 @@ export async function dispense(
     const dispensedAt = new Date()
 
     for (const line of pending) {
-      await tx.inventoryItem.update({
-        where: { drugId: line.drugId },
+      // The aggregate check above reads a snapshot taken earlier in this
+      // transaction. Under Postgres READ COMMITTED, a concurrent
+      // transaction dispensing a DIFFERENT patient who shares this drug can
+      // commit its own decrement between that snapshot and this write, so
+      // both transactions can pass their own check against the same
+      // starting balance. Making the decrement itself conditional on
+      // sufficient stock forces the database to re-check at write time —
+      // the backstop for the race the up-front check cannot see.
+      const deducted = await tx.inventoryItem.updateMany({
+        where: { drugId: line.drugId, currentStock: { gte: line.qty } },
         data: { currentStock: { decrement: line.qty } },
       })
+      if (deducted.count === 0) {
+        throw AppError.conflict(
+          ErrorCode.INSUFFICIENT_STOCK,
+          `${line.drug.label}: stock changed while dispensing, not enough remaining`,
+        )
+      }
 
       await tx.stockMovement.create({
         data: {

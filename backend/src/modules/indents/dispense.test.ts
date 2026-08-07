@@ -212,6 +212,76 @@ describe('dispense', () => {
     ).toBe(0)
   })
 
+  it('guards the decrement against a concurrent dispense for a different patient sharing a drug', async () => {
+    // The previous test covers the INTRA-batch case (two lines for the
+    // same drug inside one patient's dispense). This is the CROSS-
+    // transaction case: two DIFFERENT patients, each with their own
+    // transaction, both dispensing the same drug at once. Each
+    // transaction's up-front check reads its own snapshot of stock, so
+    // both can pass against the same starting balance — only a guard on
+    // the write itself can stop the loser.
+    const wardId = (await ward4a()).id
+    const margaretPatient = await margaret()
+    const james = await prisma.patient.findFirstOrThrow({ where: { mrn: 'MRN-003145' } })
+    const drug = await prisma.drug.findUniqueOrThrow({ where: { label: 'Amoxicillin 500mg' } })
+    const prescriber = await prisma.user.findUniqueOrThrow({ where: { username: 'b.kwame' } })
+
+    // Give James an active Amoxicillin prescription due today too, so his
+    // batch requires the same drug as Margaret's, independently.
+    await prisma.prescription.create({
+      data: {
+        patientId: james.id,
+        drugId: drug.id,
+        dose: '500mg',
+        route: 'Oral',
+        frequency: 'TDS',
+        foodTiming: 'after_food',
+        timeOfDay: ['morning', 'afternoon', 'night'],
+        startDate: new Date('2026-08-01T00:00:00Z'),
+        durationDays: 7,
+        status: 'active',
+        prescribedById: prescriber.id,
+        prescribedAt: new Date('2026-08-01T08:00:00Z'),
+      },
+    })
+    await runSweep(prisma, { date: DATE })
+
+    const margaretLine = await prisma.indentLine.findFirstOrThrow({
+      where: { patientId: margaretPatient.id, drugId: drug.id, status: 'pending' },
+    })
+    const jamesLine = await prisma.indentLine.findFirstOrThrow({
+      where: { patientId: james.id, drugId: drug.id, status: 'pending' },
+    })
+    expect(jamesLine.qty).toBe(margaretLine.qty) // both TDS, same requirement
+
+    // Exactly enough for ONE batch, not both.
+    await prisma.inventoryItem.update({
+      where: { drugId: drug.id },
+      data: { currentStock: margaretLine.qty },
+    })
+
+    const viewer = await viewerFor('k.asante')
+    const outcomes = await Promise.allSettled([
+      dispense(prisma, viewer, { patientId: margaretPatient.id, wardId, date: DATE }),
+      dispense(prisma, viewer, { patientId: james.id, wardId, date: DATE }),
+    ])
+
+    const fulfilled = outcomes.filter((o) => o.status === 'fulfilled')
+    const rejected = outcomes.filter((o) => o.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+
+    const rejection = rejected[0] as PromiseRejectedResult
+    expect(rejection.reason).toBeInstanceOf(AppError)
+    expect((rejection.reason as AppError).code).toBe('INSUFFICIENT_STOCK')
+
+    // The write-time guard, not the up-front snapshot check, is what
+    // stopped the loser — stock must land at exactly zero, never negative.
+    const after = await prisma.inventoryItem.findUniqueOrThrow({ where: { drugId: drug.id } })
+    expect(after.currentStock).toBe(0)
+    expect(after.currentStock).toBeGreaterThanOrEqual(0)
+  })
+
   it('rejects a patient with no pending lines for the day', async () => {
     const patient = await margaret()
     await expect(dispense(prisma, await viewerFor('k.asante'), {

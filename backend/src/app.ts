@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import { loadEnv } from './env'
 import authPlugin from './plugins/auth'
+import drugSearchPlugin from './plugins/drug-search'
 import errorsPlugin from './plugins/errors'
 import prismaPlugin from './plugins/prisma'
 import securityPlugin from './plugins/security'
@@ -31,6 +32,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(errorsPlugin)
   await app.register(securityPlugin)
   await app.register(prismaPlugin, { prisma: options.prisma })
+  await app.register(drugSearchPlugin)
   await app.register(authPlugin)
 
   await app.register(healthRoutes)

@@ -1,642 +1,314 @@
-# 🏥 Module 3: Inpatient Medication Dispensing & Daily Auto-Indent System
-## Complete Technical Specification, Database Logic & API Documentation
+# Auto-Indent: How Ward Medication Dispensing Actually Works
 
-> **Note for Friend / Engineering Team:**  
-> This document contains the full architecture, database logic, complete REST API endpoint definitions, and realistic JSON dummy data payloads for **Module 3 (Inpatient Medication Dispensing & Daily Auto-Indent System)** of the **Pharmassist** hospital logistics platform.
+This is the explanatory companion to `API_ENDPOINTS_DETAILED.md`. That
+document lists every route, request, and response; this one explains why
+the system is shaped the way it is — the daily cycle, the invariant that
+keeps stock and billing honest, and which values are computed on the fly
+rather than stored. It does not repeat endpoint-by-endpoint detail; where a
+route matters, it is named and you should go to the API reference for its
+contract.
 
----
+Everything below is read from the shipped code: `backend/prisma/schema.prisma`,
+`backend/src/modules/indents/service.ts`, `packages/shared/src/frequency.ts`,
+`backend/src/domain/dto.ts`, `backend/src/domain/dates.ts`, and
+`backend/src/jobs/sweep.ts`.
 
-## 📋 Table of Contents
-1. [Executive Summary & Problem Statement](#1-executive-summary--problem-statement)
-2. [System Architecture & Core Workflows](#2-system-architecture--core-workflows)
-3. [Operational Comparison Matrix](#3-operational-comparison-matrix)
-4. [Database Logic & Automated Sweep Query](#4-database-logic--automated-sweep-query)
-5. [Complete REST API Endpoint Reference](#5-complete-rest-api-endpoint-reference)
-   - [5.1 Create Digital Inpatient Prescription](#51-create-digital-inpatient-prescription)
-   - [5.2 List Active Inpatient Prescriptions](#52-list-active-inpatient-prescriptions)
-   - [5.3 Trigger / View Morning Ward Indent Sweep (6:00 AM)](#53-trigger--view-morning-ward-indent-sweep-600-am)
-   - [5.4 Get Ward Consolidated Pickup List](#54-get-ward-consolidated-pickup-list)
-   - [5.5 Confirm Pharmacy Dispense & Auto-Billing](#55-confirm-pharmacy-dispense--auto-billing)
-   - [5.6 Real-Time Stop-Order / Cancel Prescription](#56-real-time-stop-order--cancel-prescription)
-6. [Realistic Sample Payloads & Dummy Data](#6-realistic-sample-payloads--dummy-data)
-7. [Integration Code Examples (JavaScript & cURL)](#7-integration-code-examples-javascript--curl)
+## 1. The problem
 
----
+A doctor prescribes a multi-day course — say, `TDS` (three times a day) for
+seven days. Before this backend existed, nothing connected that
+prescription to a pharmacy pickup or a bill: the UI held three unrelated
+mock arrays (prescriptions, a pickup list, a transaction log) and a nurse
+or pharmacist reconciled them by hand.
 
-## 1. Executive Summary & Problem Statement
+Two failure modes fall out of doing this by hand: it is slow (a nurse
+hand-copying a ward's charts into a paper indent slip every morning), and
+it is unsafe (a doctor's stop order can lag behind the pharmacy, so a
+cancelled medication still gets prepared and billed because nobody told
+the pickup list).
 
-### 1.1 The Challenge in Inpatient Wards
-In hospital inpatient wards (IPD), attending physicians routinely prescribe multi-day treatment courses (e.g., a 7-day antibiotic course). However, central hospital pharmacies **cannot safely issue all 7 days of medication up front** due to:
-- **Mid-course dosage adjustments & cancellations** when patient condition changes.
-- **Limited bedside storage space** and risk of drug mix-ups between patients.
-- **Early patient discharges** resulting in unreturned, wasted drugs.
-- **Upfront billing complications** and cumbersome refund processing.
+The auto-indent system removes both: a scheduled sweep generates the
+day's pickup list from live prescription data, and a stop order cancels
+future pending lines the instant it is written — there is no separate
+list for it to fall out of sync with.
 
-### 1.2 The Manual Bottleneck
-Hospitals traditionally rely on **daily unit-dose dispensing**, but the manual process creates heavy friction:
-- 📝 **Daily Paperwork Overhead:** Nurses or indent students spend **1.5 to 2 hours every morning** manually reviewing paper patient charts and writing physical indent slips.
-- 🧮 **Manual Day Calculations:** High risk of human error calculating whether a patient is on Day 2, Day 3, or Day 7.
-- 🚶‍♂️ **Pharmacy Congestion:** Uncoordinated, individual trips between wards and central pharmacy draw nursing staff away from bedside care.
-- ⏱️ **Lag in Stop-Orders:** Delayed communication when a doctor cancels an order results in unnecessary medication dispensing and wastage.
-
----
-
-## 2. System Architecture & Core Workflows
-
-The **Automated Daily Indent Engine** converts multi-day digital prescriptions into 24-hour execution batches and consolidates ward requisitions automatically.
+## 2. The daily cycle, and the invariant that makes it safe
 
 ```
-┌────────────────────────────────┐
-│ 1. Digital Prescription Entry  │  Attending doctor enters prescription into EMR
-│    (Paracetamol 650mg, 7 days) │  (Durations & dose schedules registered once)
-└───────────────┬────────────────┘
-                │
-                ▼
-┌────────────────────────────────┐
-│ 2. Auto Execution Batching     │  Backend scheduler partitions 7-day order
-│    (Day 1 to Day 7 Batches)    │  into individual 24-hour execution batches
-└───────────────┬────────────────┘
-                │
-                ▼
-┌────────────────────────────────┐
-│ 3. 6:00 AM Daily Ward Sweep    │  Cron worker sweeps active inpatient orders
-│    (Consolidated Ward List)    │  Generates ward-wise digital pickup lists
-└───────────────┬────────────────┘
-                │
-                ▼
-┌────────────────────────────────┐
-│ 4. Single-Trip Pickup & Billing│  Pharmacy packs pre-sorted unit-dose pouches
-│    (Auto-Stock & Ledger Sync)  │  Single trip pickup + auto daily patient bill
-└───────────────┬────────────────┘
-                │
-                ▼
-┌────────────────────────────────┐
-│ 5. Real-Time Stop-Order Sync   │  Doctor cancels on Day 3 → Days 4-7 instantly
-│    (Instant Cancellation)      │  marked CANCELLED; no extra pharmacy issuance
-└────────────────────────────────┘
+06:00 sweep  →  ward pickup list  →  dispense (per patient)  →  billing line (per drug line)
 ```
 
----
+1. **Sweep** (`runSweep` in `backend/src/modules/indents/service.ts`, scheduled
+   by `backend/src/jobs/sweep.ts` at `0 6 * * *`, server time). For every
+   ward, it finds every prescription due that day and writes one
+   `DailyIndent` row for the ward and one `IndentLine` per due prescription.
+   Nothing is dispensed and nothing is billed yet — this step only decides
+   *what should be prepared*.
+2. **Pickup list** (`getPickupList`, behind `GET /api/wards/:id/pickup-list`
+   — see the API reference for the response shape). Reads the indent lines
+   for a ward and date back out, grouped by patient, so pharmacy staff can
+   see what to prepare in one screen instead of walking the ward.
+3. **Dispense** (`dispense`, behind `POST /api/indents/dispense`). A
+   pharmacist confirms a patient actually received their medication. This
+   is the only step that touches `InventoryItem.currentStock` or creates a
+   `BillingLine`.
+4. **Stop order** (`stopPrescription`, behind `POST
+   /api/prescriptions/:id/stop`). Can happen at any point in the cycle; it
+   cancels that prescription's still-pending indent lines so a later
+   dispense cannot act on them.
 
-## 3. Operational Comparison Matrix
+The invariant that makes the whole system trustworthy:
 
-| Feature / Process Step | Traditional Manual Process | Automated Auto-Indent System |
-| :--- | :--- | :--- |
-| **Prescription Handling** | Written in bedside physical paper charts; manually transcribed daily. | Entered digitally once in EMR; auto-scheduled by backend engine. |
-| **Treatment Day Tracking** | Manual day counting by nurses/students (prone to human error). | Automated calculation: `(CURRENT_DATE - start_date) + 1`. |
-| **Ward Requisition** | 1.5–2 hours spent hand-writing paper slips every morning. | **Zero paperwork.** Consolidated digital pickup list ready at 6:00 AM. |
-| **Pharmacy Visits** | Multiple uncoordinated trips per bed or small bed group. | **Single consolidated ward pickup trip** per shift. |
-| **Patient Billing** | Upfront 7-day billing chaos or manual daily voucher entries. | Automatic per-day deduction & ledger billing upon pharmacy confirmation. |
-| **Order Cancellation** | Delayed sync leading to medication over-dispensing. | **Real-time Stop-Order sync:** Pending future batches instantly cancelled. |
+> **Dispensing is the only thing that moves stock and the only thing that
+> creates a billing line.**
 
----
+The sweep only plans. The pickup list only displays. Only `dispense`
+decrements `InventoryItem.currentStock` and only `dispense` creates a
+`BillingLine`. That means a patient is never charged for medication that
+was merely scheduled, and stock is never short by more than what was
+actually handed to a ward.
 
-## 4. Database Logic & Automated Sweep Query
+## 3. The data model
 
-### 4.1 SQL Schema Structure
+The schema (`backend/prisma/schema.prisma`) has 11 models: `User`, `Ward`,
+`Patient`, `Drug`, `InventoryItem`, `StockMovement`, `Prescription`,
+`DailyIndent`, `IndentLine`, `BillingLine`, `ActivityEvent`. The path this
+document follows runs through six of them:
 
-```sql
-CREATE TABLE patients (
-    patient_id VARCHAR(50) PRIMARY KEY,
-    patient_name VARCHAR(100) NOT NULL,
-    ward_id VARCHAR(50) NOT NULL,
-    ward_name VARCHAR(100) NOT NULL,
-    bed_number VARCHAR(20) NOT NULL,
-    admission_status VARCHAR(20) DEFAULT 'ADMITTED'
-);
+`Prescription` (the doctor's order) → `DailyIndent` (one row per ward per
+day) → `IndentLine` (one row per due prescription within that indent) →
+`InventoryItem` / `StockMovement` (stock effect of a dispense) →
+`BillingLine` (money effect of a dispense).
 
-CREATE TABLE drugs (
-    drug_id VARCHAR(50) PRIMARY KEY,
-    drug_name VARCHAR(100) NOT NULL,
-    unit_dosage VARCHAR(50) NOT NULL,
-    unit_price DECIMAL(10, 2) NOT NULL,
-    stock_quantity INT NOT NULL
-);
+Two unique constraints are what let the 06:00 sweep be re-run safely — by
+the cron job racing a pharmacist's manual re-trigger, or by an operator
+re-running it after a crash — without ever preparing a patient's
+medication twice:
 
-CREATE TABLE inpatient_prescriptions (
-    rx_id VARCHAR(50) PRIMARY KEY,
-    patient_id VARCHAR(50) REFERENCES patients(patient_id),
-    drug_id VARCHAR(50) REFERENCES drugs(drug_id),
-    daily_dosage_qty INT NOT NULL, -- e.g., 3 units per day
-    frequency_code VARCHAR(20) NOT NULL, -- e.g., "TID" (3x daily)
-    start_date DATE NOT NULL,
-    total_prescribed_days INT NOT NULL, -- e.g., 7 days
-    status VARCHAR(20) DEFAULT 'ACTIVE' -- ACTIVE, COMPLETED, CANCELLED
-);
+- **`DailyIndent @@unique([wardId, indentDate])`** — a ward can have at
+  most one indent for a given day. A second sweep run for the same ward
+  and day cannot create a second indent; it finds the existing one.
+- **`IndentLine @@unique([indentId, prescriptionId])`** — a prescription
+  can appear at most once in a given indent. Re-running the sweep inserts
+  with `skipDuplicates: true`; any line the first run already created is
+  silently skipped rather than duplicated.
 
-CREATE TABLE daily_indent_batches (
-    batch_id VARCHAR(50) PRIMARY KEY,
-    rx_id VARCHAR(50) REFERENCES inpatient_prescriptions(rx_id),
-    ward_id VARCHAR(50) NOT NULL,
-    treatment_day INT NOT NULL,
-    indent_date DATE NOT NULL,
-    required_qty INT NOT NULL,
-    fulfillment_status VARCHAR(20) DEFAULT 'PENDING' -- PENDING, DISPENSED, CANCELLED
-);
-```
+Idempotency comes from the database, not from a "check if it exists, then
+create" read-then-write in application code. A read-then-check races:
+under concurrent callers, two processes can both read "not found" before
+either has written, and both proceed to create. The comment in
+`runSweep` spells out the concrete case — Prisma's `upsert` here compiles
+to a `SELECT` then an `INSERT`, not a single atomic `INSERT ... ON
+CONFLICT`, so two callers can both miss the `SELECT` and both attempt the
+`INSERT`. The constraint is what actually prevents the duplicate; the
+loser's `INSERT` fails with Postgres error `P2002`, which `runSweep`
+catches and turns into "read back the row the winner created" rather than
+letting it surface as an unhandled 500. A duplicate indent line would mean
+a patient's medication gets prepared, dispensed, and billed twice for one
+day — the constraint is a correctness guarantee, not an optimization.
 
-### 4.2 Morning 6:00 AM Automated Ward Indent Generation Query
+## 4. The inclusion rule
 
-```sql
--- Scheduled Background Worker Query (Runs daily at 06:00 AM)
-SELECT 
-    p.ward_id,
-    p.ward_name,
-    p.bed_number,
-    p.patient_id,
-    p.patient_name,
-    rx.rx_id,
-    rx.drug_id,
-    d.drug_name,
-    d.unit_dosage,
-    rx.daily_dosage_qty,
-    (CURRENT_DATE - rx.start_date + 1) AS current_treatment_day,
-    rx.total_prescribed_days AS total_days
-FROM inpatient_prescriptions rx
-JOIN patients p ON p.patient_id = rx.patient_id
-JOIN drugs d ON d.drug_id = rx.drug_id
-WHERE rx.status = 'ACTIVE'
-  AND p.admission_status = 'ADMITTED'
-  AND (CURRENT_DATE - rx.start_date + 1) BETWEEN 1 AND rx.total_prescribed_days;
-```
+A prescription generates an `IndentLine` on a given day only if all five
+of these hold, checked across `runSweep` and `planLinesFor` in
+`backend/src/modules/indents/service.ts`:
 
----
+1. `Prescription.status === 'active'` (checked in `runSweep`'s Prisma
+   `where`, before rows ever reach `planLinesFor`).
+2. `Patient.status === 'admitted'` (same `where`, via the `patient`
+   relation).
+3. `isSweepable(rx.frequency)` — the frequency has a schedule at all.
+4. `isDueOn(rx.frequency, rx.startDate, date)` — due specifically on this
+   date.
+5. `treatmentDayFor(rx.startDate, date)` is between `1` and
+   `rx.durationDays` inclusive — the course hasn't finished.
 
-## 5. Complete REST API Endpoint Reference
+`planLinesFor` is deliberately pure: given a list of already-filtered
+prescriptions and a date, it decides who's due and computes each line's
+quantity and treatment day. It does not re-check status or admission —
+those are conditions 1 and 2, enforced only by the caller's `where`
+clause. Both the scheduled 06:00 job and the manual sweep endpoint go
+through this same function, so a manual re-trigger can never compute a
+different answer than the cron job would have.
 
-### Base URL: `https://api.pharmassist.hospital.com/api/v1`
+```ts
+// backend/src/modules/indents/service.ts
+for (const rx of prescriptions) {
+  if (!isSweepable(rx.frequency)) continue
+  if (!isDueOn(rx.frequency, rx.startDate, date)) continue
 
----
+  const treatmentDay = treatmentDayFor(rx.startDate, date)
+  if (treatmentDay < 1 || treatmentDay > rx.durationDays) continue
 
-### 5.1 Create Digital Inpatient Prescription
-- **Endpoint:** `POST /inpatient/prescriptions`
-- **Description:** Attending physician registers a multi-day inpatient treatment plan.
-- **Request Headers:** `Content-Type: application/json`, `Authorization: Bearer <jwt_token>`
-
-#### Request Body Example
-```json
-{
-  "patient_id": "PAT-9082",
-  "drug_id": "DRUG-1004",
-  "daily_dosage_qty": 3,
-  "frequency_code": "TID",
-  "frequency_description": "Every 8 hours",
-  "start_date": "2026-08-04",
-  "total_prescribed_days": 7,
-  "prescribing_doctor_id": "DOC-402",
-  "notes": "Administer post-meals"
+  planned.push({
+    prescriptionId: rx.id,
+    patientId: rx.patientId,
+    drugId: rx.drugId,
+    qty: dosesPerDay(rx.frequency),
+    treatmentDay,
+  })
 }
 ```
 
-#### Response Body (`201 Created`)
-```json
-{
-  "success": true,
-  "message": "Inpatient prescription created successfully & 7 daily batches scheduled.",
-  "data": {
-    "rx_id": "RX-88410",
-    "patient_id": "PAT-9082",
-    "patient_name": "Sarah Jenkins",
-    "bed_number": "Bed 205",
-    "ward_name": "ICU Ward B",
-    "drug_name": "Paracetamol 650mg",
-    "daily_dosage_qty": 3,
-    "total_prescribed_days": 7,
-    "total_units_allocated": 21,
-    "start_date": "2026-08-04",
-    "end_date": "2026-08-10",
-    "status": "ACTIVE",
-    "created_at": "2026-08-04T08:30:00Z"
-  }
-}
-```
+The eight frequency codes (`packages/shared/src/frequency.ts`):
 
----
+| Code | Meaning | Doses/day | Swept? |
+|---|---|---|---|
+| `OD` | once daily | 1 | yes |
+| `BD` | twice daily | 2 | yes |
+| `TDS` | three times daily | 3 | yes |
+| `QDS` | four times daily | 4 | yes |
+| `ON` | at night | 1 | yes |
+| `Weekly` | once every 7 days | 1 | yes, only on its due day |
+| `PRN` | as needed | 0 | never |
+| `STAT` | immediate, one-off | 0 | never |
 
-### 5.2 List Active Inpatient Prescriptions
-- **Endpoint:** `GET /inpatient/prescriptions`
-- **Query Parameters:**
-  - `ward_id` *(optional)*: e.g., `WARD-ICU-B`
-  - `status` *(optional)*: `ACTIVE` | `COMPLETED` | `CANCELLED` (Default: `ACTIVE`)
-  - `page`: `1`
-  - `limit`: `20`
+`Weekly` is due when the number of whole days since `startDate` is a
+multiple of 7 (`isDueOn`: `offsetDays % 7 === 0`) — so it recurs every
+seventh day counting from the start date, not from a fixed day of the
+week. `PRN` and `STAT` are excluded by `isSweepable` before `isDueOn` is
+even consulted: neither has a schedule the sweep can act on, so both are
+dispensed ad hoc outside the indent system entirely — there is no
+`IndentLine` path for them.
 
-#### Response Body (`200 OK`)
-```json
-{
-  "success": true,
-  "page": 1,
-  "limit": 20,
-  "total_count": 3,
-  "data": [
-    {
-      "rx_id": "RX-88410",
-      "patient_id": "PAT-9082",
-      "patient_name": "Sarah Jenkins",
-      "bed_number": "Bed 205",
-      "ward_id": "WARD-ICU-B",
-      "ward_name": "ICU Ward B",
-      "drug_id": "DRUG-1004",
-      "drug_name": "Paracetamol 650mg Tablet",
-      "daily_dosage_qty": 3,
-      "start_date": "2026-08-04",
-      "current_day": 1,
-      "total_prescribed_days": 7,
-      "status": "ACTIVE"
-    },
-    {
-      "rx_id": "RX-88411",
-      "patient_id": "PAT-9085",
-      "patient_name": "Robert Miller",
-      "bed_number": "Bed 208",
-      "ward_id": "WARD-ICU-B",
-      "ward_name": "ICU Ward B",
-      "drug_id": "DRUG-2015",
-      "drug_name": "Ceftriaxone 1g IV Injection",
-      "daily_dosage_qty": 2,
-      "start_date": "2026-08-02",
-      "current_day": 3,
-      "total_prescribed_days": 5,
-      "status": "ACTIVE"
-    },
-    {
-      "rx_id": "RX-88412",
-      "patient_id": "PAT-9090",
-      "patient_name": "Anita Desai",
-      "bed_number": "Bed 212",
-      "ward_id": "WARD-ICU-B",
-      "ward_name": "ICU Ward B",
-      "drug_id": "DRUG-3088",
-      "drug_name": "Pantoprazole 40mg IV",
-      "daily_dosage_qty": 1,
-      "start_date": "2026-08-01",
-      "current_day": 4,
-      "total_prescribed_days": 7,
-      "status": "ACTIVE"
-    }
-  ]
-}
-```
+## 5. The dispense transaction
 
----
+`dispense` (`backend/src/modules/indents/service.ts`) runs as one Prisma
+`$transaction`, in this order, for all of a patient's pending lines on a
+given ward and date:
 
-### 5.3 Trigger / View Morning Ward Indent Sweep (6:00 AM)
-- **Endpoint:** `POST /inpatient/indents/sweep`
-- **Description:** Triggers the daily 6:00 AM automated background worker or previews today's calculated ward indents.
-- **Request Body:** *(Optional configuration)*
-```json
-{
-  "target_date": "2026-08-04",
-  "force_recalculate": false
-}
-```
+1. Load every `IndentLine` for the patient's indent, with drug, inventory,
+   and patient included, **ordered by `drugId`**.
+2. Separate cancelled lines (a stop order beat this dispense to them) from
+   pending ones, and fail with a clear conflict if there's nothing left to
+   dispense.
+3. **Aggregate required quantity per drug** across all pending lines
+   before checking anything.
+4. **Check every drug's total requirement against stock, for every line,
+   before writing any of it.**
+5. Only then, loop over the lines: decrement `InventoryItem.currentStock`,
+   record a `StockMovement`, flip the line to `dispensed`, and create its
+   `BillingLine` with the drug's current unit price copied onto the row.
+6. Write one `ActivityEvent` summarizing the batch.
 
-#### Response Body (`200 OK`)
-```json
-{
-  "success": true,
-  "sweep_timestamp": "2026-08-04T06:00:00Z",
-  "total_wards_processed": 4,
-  "total_patients_included": 48,
-  "total_indent_items_generated": 112,
-  "status": "COMPLETED",
-  "summary_by_ward": [
-    {
-      "ward_id": "WARD-ICU-B",
-      "ward_name": "ICU Ward B",
-      "patient_count": 12,
-      "indent_batch_id": "IND-20260804-ICUB"
-    },
-    {
-      "ward_id": "WARD-GENERAL-A",
-      "ward_name": "General Surgical Ward A",
-      "patient_count": 20,
-      "indent_batch_id": "IND-20260804-GENA"
-    }
-  ]
-}
-```
+Two things about the ordering matter, and both are guarding against a
+specific way this could go wrong silently:
 
----
+**Stock is checked for every line before any write happens.** If checking
+and writing were interleaved per line, a shortfall discovered on the last
+line of a five-line batch would leave the first four already decremented
+and billed — a transaction rollback undoes the database rows, but by then
+the pharmacist may already have physically handed over four drugs. Doing
+all the checks first, before the first write, means a shortfall anywhere
+in the batch fails the whole batch before anything is committed and
+before anything is handed to the ward.
 
-### 5.4 Get Ward Consolidated Pickup List
-- **Endpoint:** `GET /inpatient/wards/{ward_id}/pickup-list`
-- **Query Parameters:**
-  - `date`: `2026-08-04` *(Default: today's date)*
+**The per-drug aggregation happens before the check, not the write.**
+`Prescription` is only unique on `(patientId, drugId, startDate)`, so one
+patient can hold two active prescriptions for the same drug with
+different start dates that are both due the same day — two `IndentLine`
+rows for the same drug in one dispense batch. If each line checked stock
+independently against a figure read once at the top of the loop, both
+lines could pass the same check and both decrement, driving
+`currentStock` negative with nothing to stop it. Summing required
+quantity per drug first, then checking the sum, closes that gap.
 
-#### Response Body (`200 OK`)
-```json
-{
-  "success": true,
-  "indent_batch_id": "IND-20260804-ICUB",
-  "date": "2026-08-04",
-  "ward_id": "WARD-ICU-B",
-  "ward_name": "ICU Ward B",
-  "status": "READY_FOR_PICKUP",
-  "pickup_summary": {
-    "total_unique_drugs": 3,
-    "total_unit_pouches": 6
-  },
-  "consolidated_items": [
-    {
-      "drug_id": "DRUG-1004",
-      "drug_name": "Paracetamol 650mg Tablet",
-      "total_qty_needed": 3,
-      "unit_of_measure": "Tablets",
-      "patient_breakdown": [
-        {
-          "patient_id": "PAT-9082",
-          "patient_name": "Sarah Jenkins",
-          "bed_number": "Bed 205",
-          "treatment_day": "Day 1 of 7",
-          "qty": 3
-        }
-      ]
-    },
-    {
-      "drug_id": "DRUG-2015",
-      "drug_name": "Ceftriaxone 1g IV Injection",
-      "total_qty_needed": 2,
-      "unit_of_measure": "Vials",
-      "patient_breakdown": [
-        {
-          "patient_id": "PAT-9085",
-          "patient_name": "Robert Miller",
-          "bed_number": "Bed 208",
-          "treatment_day": "Day 3 of 5",
-          "qty": 2
-        }
-      ]
-    },
-    {
-      "drug_id": "DRUG-3088",
-      "drug_name": "Pantoprazole 40mg IV",
-      "total_qty_needed": 1,
-      "unit_of_measure": "Vials",
-      "patient_breakdown": [
-        {
-          "patient_id": "PAT-9090",
-          "patient_name": "Anita Desai",
-          "bed_number": "Bed 212",
-          "treatment_day": "Day 4 of 7",
-          "qty": 1
-        }
-      ]
-    }
-  ]
-}
-```
+**Unit price is snapshotted onto `BillingLine.unitPrice`, not
+referenced.** It's a copy of `Drug.unitPrice` taken at the moment of
+dispense, not a live join. If the catalog price changes next month, every
+bill already issued keeps the price the patient was actually charged;
+only new dispenses pick up the new price.
 
----
+Row locking gets a mention too: lines are loaded `orderBy: { drugId: 'asc'
+}` specifically so that when two pharmacists dispense different patients
+who share a drug, both transactions acquire `InventoryItem` row locks in
+the same order — otherwise two transactions taking locks in opposite
+orders can deadlock.
 
-### 5.5 Confirm Pharmacy Dispense & Auto-Billing
-- **Endpoint:** `POST /inpatient/indents/fulfill`
-- **Description:** Central pharmacy confirms dispatch of the pre-sorted unit-dose batch to the ward student/nurse. Auto-deducts stock and posts daily charges to patient accounts.
+`dispense` is also idempotent per line: each `IndentLine` update is
+conditioned on `status: 'pending'` (`updateMany`, not a blind update by
+id), so a second dispense attempt on an already-dispensed line — a
+concurrent double-submit under Postgres's READ COMMITTED isolation — lands
+as a labelled `BATCH_ALREADY_FULFILLED` conflict rather than a raw unique
+constraint violation on the `BillingLine` insert.
 
-#### Request Body Example
-```json
-{
-  "indent_batch_id": "IND-20260804-ICUB",
-  "ward_id": "WARD-ICU-B",
-  "dispensed_by_pharmacist_id": "PHARM-108",
-  "picked_up_by_staff_id": "NURSE-512",
-  "dispense_notes": "All pouches verified & sealed in Ward-B transport box."
-}
-```
+## 6. Stop orders
 
-#### Response Body (`200 OK`)
-```json
-{
-  "success": true,
-  "message": "Indent batch fulfilled. Inventory updated & daily patient billing ledger updated.",
-  "data": {
-    "indent_batch_id": "IND-20260804-ICUB",
-    "fulfillment_time": "2026-08-04T06:45:12Z",
-    "status": "DISPENSED",
-    "billing_transactions": [
-      {
-        "transaction_id": "TXN-9001",
-        "patient_id": "PAT-9082",
-        "patient_name": "Sarah Jenkins",
-        "amount_billed": 45.00,
-        "currency": "INR",
-        "status": "POSTED_TO_IPD_BILL"
-      },
-      {
-        "transaction_id": "TXN-9002",
-        "patient_id": "PAT-9085",
-        "patient_name": "Robert Miller",
-        "amount_billed": 320.00,
-        "currency": "INR",
-        "status": "POSTED_TO_IPD_BILL"
-      },
-      {
-        "transaction_id": "TXN-9003",
-        "patient_id": "PAT-9090",
-        "patient_name": "Anita Desai",
-        "amount_billed": 85.00,
-        "currency": "INR",
-        "status": "POSTED_TO_IPD_BILL"
-      }
-    ]
-  }
-}
-```
+`stopPrescription` (`backend/src/modules/prescriptions/service.ts`) sets
+the prescription to `stopped` and cancels its **pending** `IndentLine`
+rows from today forward. Lines already `dispensed` are left untouched —
+the patient received that medication and owes for it; a stop order is not
+a refund mechanism (refunds are explicitly out of scope, see §8).
 
----
+Cancelling a prescription's last pending line can empty out an indent
+entirely. `closeIndentIfComplete` (`backend/src/modules/indents/service.ts`)
+is the shared check for that: it counts an indent's remaining `pending`
+lines and flips the indent to `dispensed` once none are left. Both
+`dispense` and `stopPrescription` call it after their own transaction
+commits — not from inside it. The reasoning, from the function's comment:
+two concurrent writers that each clear the last pending line only see
+their own transaction's snapshot mid-transaction, so counting has to
+happen after commit for the writer that lands last to see every commit
+that came before it. Before both callers shared this check, a stop order
+that cancelled an indent's last pending line left that indent stuck at
+`swept` forever, because only `dispense` used to call it.
 
-### 5.6 Real-Time Stop-Order / Cancel Prescription
-- **Endpoint:** `POST /inpatient/prescriptions/{rx_id}/stop`
-- **Description:** Immediately stops an active prescription (e.g., patient discharged early or medication changed). All pending future indents (e.g., Days 4–7) are marked `CANCELLED` to block pharmacy issuance.
+## 7. Derived vs. stored
 
-#### Request Body Example
-```json
-{
-  "reason": "DISCHARGE_EARLY",
-  "cancelled_by_doctor_id": "DOC-402",
-  "cancellation_notes": "Patient condition improved, discharged to home care."
-}
-```
+Four values are computed at read time and never written to a column:
 
-#### Response Body (`200 OK`)
-```json
-{
-  "success": true,
-  "message": "Prescription cancelled. Pending daily batches automatically updated to CANCELLED.",
-  "data": {
-    "rx_id": "RX-88410",
-    "patient_id": "PAT-9082",
-    "status": "CANCELLED",
-    "cancelled_at": "2026-08-04T10:15:00Z",
-    "completed_days": 2,
-    "cancelled_future_days": [3, 4, 5, 6, 7],
-    "unissued_units_saved": 15
-  }
-}
-```
+- **`Prescription.currentDay`** (`toPrescriptionDto` in
+  `backend/src/domain/dto.ts`) — `treatmentDayFor(startDate, today)`. A
+  stored `currentDay` would be correct only for the moment it was written
+  and wrong every day after — it would need a background job just to keep
+  incrementing it. Computing it from `startDate` at read time means it is
+  always correct for whatever "now" the read happens at, with no
+  maintenance job required. (`toPrescriptionDto` also derives display
+  `status`: an `active` prescription whose course has elapsed reports as
+  `completed`, but a `stopped` prescription is never reinterpreted — a
+  clinical stop decision outranks the calendar.)
+- **`InventoryItem` `status`** (`stockStatusFor` in
+  `backend/src/domain/dto.ts`) — `critical` / `low` / `ok`, computed from
+  `currentStock` versus `reorderLevel` (`≤ 20%` of reorder level is
+  `critical`, `≤` reorder level is `low`). `currentStock` changes on every
+  dispense and restock; a stored status column would need to be
+  recomputed on every one of those writes to stay correct; deriving it at
+  read time makes that impossible to get out of sync.
+- **Ward `sweepStatus`** (`listWards` in `backend/src/modules/wards/service.ts`)
+  — read off today's `DailyIndent.status` for that ward (`pending` if none
+  exists yet).
+- **Ward `activePatients`** (same function) — a live `Patient` count
+  scoped to `status: 'admitted'` for that ward, not a counter maintained
+  on admit/discharge.
 
----
+The common thread: every one of these is a function of other stored data
+plus "now" (today's date, current stock, current admissions). Storing the
+output would mean storing a value that is only valid until the next
+midnight, dispense, restock, admission, or discharge — and then needing
+code somewhere to keep it in sync. Deriving it at read time means there
+is nothing to keep in sync.
 
-## 6. Realistic Sample Payloads & Dummy Data
+## 8. What is deliberately not built
 
-Here is a complete JSON dataset ready for testing, API mocking (e.g. Postman, Prism, MSW, Mockoon), or backend seeding.
+From the design spec's out-of-scope list
+(`docs/superpowers/specs/2026-08-06-pharmassist-backend-design.md`, §12),
+still true of the shipped system:
 
-```json
-{
-  "wards": [
-    {
-      "ward_id": "WARD-ICU-B",
-      "ward_name": "ICU Ward B",
-      "floor": "2nd Floor - East Wing",
-      "beds": ["Bed 201", "Bed 202", "Bed 205", "Bed 208", "Bed 212"]
-    }
-  ],
-  "patients": [
-    {
-      "patient_id": "PAT-9082",
-      "patient_name": "Sarah Jenkins",
-      "age": 42,
-      "gender": "Female",
-      "bed_number": "Bed 205",
-      "ward_id": "WARD-ICU-B",
-      "admission_date": "2026-08-03"
-    },
-    {
-      "patient_id": "PAT-9085",
-      "patient_name": "Robert Miller",
-      "age": 61,
-      "gender": "Male",
-      "bed_number": "Bed 208",
-      "ward_id": "WARD-ICU-B",
-      "admission_date": "2026-08-01"
-    }
-  ],
-  "drugs": [
-    {
-      "drug_id": "DRUG-1004",
-      "drug_name": "Paracetamol 650mg Tablet",
-      "unit_price": 15.00,
-      "stock_quantity": 4500
-    },
-    {
-      "drug_id": "DRUG-2015",
-      "drug_name": "Ceftriaxone 1g IV Injection",
-      "unit_price": 160.00,
-      "stock_quantity": 800
-    }
-  ],
-  "active_prescriptions": [
-    {
-      "rx_id": "RX-88410",
-      "patient_id": "PAT-9082",
-      "drug_id": "DRUG-1004",
-      "daily_dosage_qty": 3,
-      "start_date": "2026-08-04",
-      "total_prescribed_days": 7,
-      "status": "ACTIVE"
-    },
-    {
-      "rx_id": "RX-88411",
-      "patient_id": "PAT-9085",
-      "drug_id": "DRUG-2015",
-      "daily_dosage_qty": 2,
-      "start_date": "2026-08-02",
-      "total_prescribed_days": 5,
-      "status": "ACTIVE"
-    }
-  ]
-}
-```
+- Discharge workflow
+- Bill voiding and refunds
+- Refresh-token rotation
+- Pagination beyond a `limit` parameter
+- Multi-hospital tenancy
+- Importing `Medicine_Names.csv`
+- Anything from `demo/`
 
----
+Two further gaps are known and intentional rather than oversights:
+`runSweep`'s per-ward loop is not transactional across wards — a crash
+partway through leaves some wards swept and others not, but because the
+sweep is idempotent (§3), simply re-running it self-heals the gap. And the
+06:00 scheduled job (`backend/src/jobs/sweep.ts`) logs a failure without
+retrying; recovery is "run the manual sweep endpoint," not an automatic
+retry loop.
 
-## 7. Integration Code Examples (JavaScript & cURL)
-
-### 7.1 JavaScript (Fetch API Example)
-
-```javascript
-// Fetch Morning Ward Pickup List for Ward ICU-B
-async function fetchWardPickupList(wardId = 'WARD-ICU-B') {
-  try {
-    const response = await fetch(`https://api.pharmassist.hospital.com/api/v1/inpatient/wards/${wardId}/pickup-list`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer YOUR_JWT_TOKEN'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Ward Pickup List:', data.consolidated_items);
-    return data;
-  } catch (error) {
-    console.error('Error fetching ward pickup list:', error);
-  }
-}
-
-// Execute Stop Order when patient is discharged
-async function executeStopOrder(rxId, doctorId, reason) {
-  const response = await fetch(`https://api.pharmassist.hospital.com/api/v1/inpatient/prescriptions/${rxId}/stop`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer YOUR_JWT_TOKEN'
-    },
-    body: JSON.stringify({
-      reason: reason,
-      cancelled_by_doctor_id: doctorId,
-      cancellation_notes: 'Stop order executed via EMR dashboard.'
-    })
-  });
-  return await response.json();
-}
-```
-
-### 7.2 cURL Commands for Terminal Testing
-
-#### Create Prescription:
-```bash
-curl -X POST "https://api.pharmassist.hospital.com/api/v1/inpatient/prescriptions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{
-    "patient_id": "PAT-9082",
-    "drug_id": "DRUG-1004",
-    "daily_dosage_qty": 3,
-    "frequency_code": "TID",
-    "start_date": "2026-08-04",
-    "total_prescribed_days": 7,
-    "prescribing_doctor_id": "DOC-402"
-  }'
-```
-
-#### Get Ward Pickup List:
-```bash
-curl -X GET "https://api.pharmassist.hospital.com/api/v1/inpatient/wards/WARD-ICU-B/pickup-list" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-#### Fulfill Ward Indent Batch:
-```bash
-curl -X POST "https://api.pharmassist.hospital.com/api/v1/inpatient/indents/fulfill" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{
-    "indent_batch_id": "IND-20260804-ICUB",
-    "ward_id": "WARD-ICU-B",
-    "dispensed_by_pharmacist_id": "PHARM-108",
-    "picked_up_by_staff_id": "NURSE-512"
-  }'
-```
-
----
-
-## 8. Summary for Development Teams
-
-- **Frontend Engineers:** Use the JSON payloads in **Section 5** & **Section 6** to build mock APIs, state management stores, or MSW handlers for the Ward Dashboard and Pharmacy Pickup screens.
-- **Backend Engineers:** Implement the DB schema & SQL query in **Section 4**, and wire up the API endpoints detailed in **Section 5**.
-- **QA / Testers:** Use the cURL scripts in **Section 7** and mock data in **Section 6** for automated contract & integration tests.
+For endpoint-by-endpoint request/response detail on any of the routes
+named above, see `API_ENDPOINTS_DETAILED.md`.

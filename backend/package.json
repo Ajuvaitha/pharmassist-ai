@@ -14,7 +14,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
-    "explain": "tsx scripts/explain-queries.ts"
+    "explain": "tsx scripts/explain-queries.ts",
+    "routes": "tsx scripts/list-routes.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

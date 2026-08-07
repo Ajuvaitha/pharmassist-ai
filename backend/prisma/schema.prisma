@@ -116,8 +116,6 @@ model User {
   billingLinesBilled   BillingLine[]
   stockMovements       StockMovement[]
   activityEvents       ActivityEvent[]
-
-  @@index([wardId])
 }
 
 model Ward {
@@ -317,6 +315,10 @@ model ActivityEvent {
   actor      User?        @relation(fields: [actorId], references: [id])
   occurredAt DateTime     @default(now())
 
+  // Measured with EXPLAIN ANALYZE against 100k rows (backend/scripts/explain-queries.ts):
+  // the unfiltered feed uses this index (Index Scan Backward on occurredAt)...
   @@index([occurredAt])
+  // ...and the type-filtered feed uses this composite instead of falling back
+  // to the one above, so both are kept.
   @@index([type, occurredAt])
 }

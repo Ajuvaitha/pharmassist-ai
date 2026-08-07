@@ -50,8 +50,8 @@ list for it to fall out of sync with.
    see what to prepare in one screen instead of walking the ward.
 3. **Dispense** (`dispense`, behind `POST /api/indents/dispense`). A
    pharmacist confirms a patient actually received their medication. This
-   is the only step that touches `InventoryItem.currentStock` or creates a
-   `BillingLine`.
+   is the only step in the cycle that decrements `InventoryItem.currentStock`,
+   and the only thing anywhere that creates a `BillingLine`.
 4. **Stop order** (`stopPrescription`, behind `POST
    /api/prescriptions/:id/stop`). Can happen at any point in the cycle; it
    cancels that prescription's still-pending indent lines so a later
@@ -59,14 +59,20 @@ list for it to fall out of sync with.
 
 The invariant that makes the whole system trustworthy:
 
-> **Dispensing is the only thing that moves stock and the only thing that
-> creates a billing line.**
+> **Dispensing is the only thing that takes stock *out*, and the only
+> thing that creates a billing line.**
 
 The sweep only plans. The pickup list only displays. Only `dispense`
-decrements `InventoryItem.currentStock` and only `dispense` creates a
+decrements `InventoryItem.currentStock`, and only `dispense` creates a
 `BillingLine`. That means a patient is never charged for medication that
 was merely scheduled, and stock is never short by more than what was
 actually handed to a ward.
+
+Stock does move in one other place — `restock` in the inventory module
+puts stock *in*. It only ever increments, and it never creates a
+`BillingLine`, so it cannot make a patient owe anything. Both paths write
+an append-only `StockMovement` row in the same transaction as the balance
+change, so the movement log always reconciles with `currentStock`.
 
 ## 3. The data model
 

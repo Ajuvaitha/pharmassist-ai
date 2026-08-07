@@ -6,6 +6,7 @@ import { useDrugs } from '../api/drugs';
 interface PrescriptionFormProps {
   initial?: Partial<Prescription>;
   prescribedBy: string;
+  lockedDrug?: { id: string; label: string };
   onSave: (rx: CreatePrescriptionRequest) => void;
   onCancel: () => void;
 }
@@ -24,9 +25,9 @@ const TIMES_OF_DAY: { value: TimeOfDay; label: string }[] = [
   { value: 'night', label: 'Night' },
 ];
 
-export default function PrescriptionForm({ initial, onSave, onCancel }: PrescriptionFormProps) {
+export default function PrescriptionForm({ initial, lockedDrug, onSave, onCancel }: PrescriptionFormProps) {
   const { data: drugs } = useDrugs();
-  const [drugId, setDrugId] = useState(initial?.drugId ?? '');
+  const [drugId, setDrugId] = useState(lockedDrug?.id ?? initial?.drugId ?? '');
   const [dose, setDose] = useState(initial?.dose ?? '');
   const [route, setRoute] = useState<MedRoute>(initial?.route ?? 'Oral');
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? 'OD');
@@ -61,13 +62,22 @@ export default function PrescriptionForm({ initial, onSave, onCancel }: Prescrip
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 12 }}>
-        <div>
-          <label style={lbl}>Drug</label>
-          <select required value={drugId} onChange={e => setDrugId(e.target.value)} style={inp}>
-            <option value="">Select a drug…</option>
-            {(drugs ?? []).map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </div>
+        {lockedDrug ? (
+          <div>
+            <label style={lbl}>Drug</label>
+            <div style={{ ...inp, display: 'flex', alignItems: 'center', background: '#F0F9FB' }}>
+              {lockedDrug.label}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <label style={lbl}>Drug</label>
+            <select required value={drugId} onChange={e => setDrugId(e.target.value)} style={inp}>
+              <option value="">Select a drug…</option>
+              {(drugs ?? []).map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <label style={lbl}>Dose</label>
           <input

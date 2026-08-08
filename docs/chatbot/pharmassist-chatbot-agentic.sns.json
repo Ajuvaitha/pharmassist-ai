@@ -1,7 +1,7 @@
 {
   "_platform": "agentbuilder",
   "_version": 1,
-  "_exportedAt": "2026-08-08T07:16:30.000Z",
+  "_exportedAt": "2026-08-08T07:39:23.000Z",
   "_fingerprint": "YWN0aW9uOmNvcmUuc2V0fGFjdGlvbjpjb3JlLnNldHxhY3Rpb246Y29yZS5zZXR8",
   "nodes": [
     {
@@ -780,55 +780,55 @@
             },
             {
               "name": "kind",
-              "description": "Turn type, one lowercase word. 'confirm' = user agrees to the pending action shown (yes/ok/sure/confirm/do it) \u2014 only when a pending action is present. 'cancel' = user rejects it (no/cancel/stop) \u2014 only when a pending action is present. 'action' = user asks to perform a write: restock inventory, or register/admit a new patient. Otherwise 'query' (a lookup question).",
+              "description": "Turn type, one lowercase word. 'confirm' = user agrees to a pending action (yes/ok/sure/confirm/do it). 'cancel' = user rejects it (no/cancel/stop). 'action' = user asks to perform a write: restock inventory, or register/admit a new patient. Otherwise 'query' (a lookup question).",
               "type": "string",
               "required": true
             },
             {
               "name": "action",
-              "description": "When kind is 'action', the action name: 'restock' or 'create_patient'. Else empty string.",
+              "description": "When kind='action': 'restock' or 'create_patient'. Else empty.",
               "type": "string",
               "required": false
             },
             {
               "name": "drug",
-              "description": "Drug/medication name to restock (when action=restock). Else empty.",
+              "description": "Drug/medication name to restock (action=restock). Else empty.",
               "type": "string",
               "required": false
             },
             {
               "name": "qty",
-              "description": "Quantity of units to add to stock (when action=restock). Else 0.",
+              "description": "Units to add to stock (action=restock). Else 0.",
               "type": "number",
               "required": false
             },
             {
               "name": "name",
-              "description": "New patient full name (when action=create_patient). Else empty.",
+              "description": "New patient full name (create_patient). Else empty.",
               "type": "string",
               "required": false
             },
             {
               "name": "dob",
-              "description": "New patient date of birth as YYYY-MM-DD (create_patient). Else empty.",
+              "description": "New patient date of birth YYYY-MM-DD (create_patient). Else empty.",
               "type": "string",
               "required": false
             },
             {
               "name": "gender",
-              "description": "New patient gender: Male, Female, or Other (create_patient). Else empty.",
+              "description": "New patient gender: Male, Female, or Other. Else empty.",
               "type": "string",
               "required": false
             },
             {
               "name": "phone",
-              "description": "New patient phone number (create_patient). Else empty.",
+              "description": "New patient phone number. Else empty.",
               "type": "string",
               "required": false
             },
             {
               "name": "wardCode",
-              "description": "Ward code the patient is admitted to, e.g. 'Ward 4A' (create_patient). Else empty.",
+              "description": "Ward code, e.g. 'Ward 4A' (create_patient). Else empty.",
               "type": "string",
               "required": false
             },
@@ -840,7 +840,7 @@
             },
             {
               "name": "admissionDate",
-              "description": "Admission date as YYYY-MM-DD (create_patient). Else empty.",
+              "description": "Admission date YYYY-MM-DD (create_patient). Else empty.",
               "type": "string",
               "required": false
             },
@@ -11401,7 +11401,7 @@
       },
       "type": "switch",
       "width": 240,
-      "height": 110,
+      "height": 100,
       "dragging": false,
       "position": {
         "x": 840,
@@ -11419,7 +11419,7 @@
         "label": "Commit Pending Action",
         "inputs": {
           "credentialId": "",
-          "query": "WITH p AS (\n  SELECT action, params FROM \"ChatbotPendingAction\"\n  WHERE \"sessionId\" = $1 AND \"createdAt\" > now() - interval '5 minutes'\n),\nres AS (\n  SELECT CASE p.action\n    WHEN 'restock' THEN sql_restock(p.params->>'drug', (p.params->>'qty')::bigint, false)\n    WHEN 'create_patient' THEN sql_create_patient(\n      p.params->>'name', p.params->>'dob', p.params->>'gender', p.params->>'phone',\n      p.params->>'wardCode', p.params->>'bed', p.params->>'admissionDate',\n      p.params->>'diagnosis', p.params->>'allergies', false)\n  END AS j\n  FROM p\n),\ndel AS (\n  DELETE FROM \"ChatbotPendingAction\" WHERE \"sessionId\" = $1\n)\nSELECT COALESCE((SELECT j->>'summary' FROM res), (SELECT j->>'error' FROM res), 'Nothing to confirm \u2014 that request may have expired.') AS reply;",
+          "query": "SELECT sql_chat_commit($1) AS reply",
           "queryParameters": [
             "{{ $('Normalize Input').item.json.sessionId }}"
           ],
@@ -11500,7 +11500,7 @@
       },
       "type": "action",
       "width": 240,
-      "height": 110,
+      "height": 100,
       "dragging": false,
       "position": {
         "x": 1140,
@@ -11509,158 +11509,6 @@
       "selected": false,
       "positionAbsolute": {
         "x": 1140,
-        "y": 760
-      }
-    },
-    {
-      "id": "set-confirm",
-      "data": {
-        "label": "Shape Reply (Confirm)",
-        "inputs": {
-          "mode": "manual",
-          "assignments": [
-            {
-              "name": "reply",
-              "value": "{{ $json.reply }}",
-              "valueType": "expression",
-              "type": "string"
-            }
-          ],
-          "includeBinaryData": false,
-          "supportDotNotation": true,
-          "inputFieldsToInclude": "selected",
-          "fieldsToInclude": [],
-          "includeOtherInputFields": false,
-          "ignoreTypeConversionErrors": false
-        },
-        "toolId": "core.set",
-        "toolData": {
-          "id": "core.set",
-          "displayName": "Set Fields",
-          "category": "Core  Utilities",
-          "provider": "core",
-          "operation": "set",
-          "description": "Set or update fields",
-          "inputSchemaJSON": {
-            "type": "object",
-            "properties": {
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "manual",
-                  "json"
-                ],
-                "default": "manual",
-                "description": "Select Manual Mapping or JSON Output"
-              },
-              "assignments": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string",
-                      "description": "Field name"
-                    },
-                    "value": {
-                      "description": "Field value (Fixed or Expression)"
-                    },
-                    "valueType": {
-                      "type": "string",
-                      "enum": [
-                        "fixed",
-                        "expression"
-                      ],
-                      "default": "expression",
-                      "description": "Whether field value is fixed or an expression"
-                    },
-                    "type": {
-                      "type": "string",
-                      "description": "Data type of the field"
-                    }
-                  },
-                  "required": [
-                    "name"
-                  ],
-                  "additionalProperties": false
-                },
-                "description": "Fields to set when using Manual Mapping"
-              },
-              "jsonValue": {
-                "type": "string",
-                "description": "JSON to merge into the output when using JSON Output mode"
-              },
-              "includeOtherInputFields": {
-                "type": "boolean",
-                "default": false,
-                "description": "Also include unchanged fields from the input"
-              },
-              "inputFieldsToInclude": {
-                "type": "string",
-                "enum": [
-                  "all",
-                  "selected",
-                  "allExcept"
-                ],
-                "default": "all",
-                "description": "Choose which input data to include in the output data"
-              },
-              "fieldsToInclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to include when Input Fields to Include is Selected"
-              },
-              "fieldsToExclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to exclude when Input Fields to Include is All Except"
-              },
-              "includeBinaryData": {
-                "type": "boolean",
-                "default": true,
-                "description": "Include binary data in the output"
-              },
-              "ignoreTypeConversionErrors": {
-                "type": "boolean",
-                "default": false,
-                "description": "Ignore some data type errors when mapping fields (Manual Mapping only)"
-              },
-              "supportDotNotation": {
-                "type": "boolean",
-                "default": true,
-                "description": "If enabled, dotted names create nested objects (e.g. number.one \u2192 { number: { one: value } })"
-              },
-              "items": {
-                "type": "array",
-                "description": "Array of items to process (for multi-item execution)"
-              },
-              "$inputItem": {
-                "description": "Single item to process (for backward compatibility)"
-              }
-            },
-            "additionalProperties": true,
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          }
-        },
-        "isTrigger": false,
-        "connectedHandles": [],
-        "isPrimaryTrigger": false
-      },
-      "type": "action",
-      "width": 240,
-      "height": 94,
-      "dragging": false,
-      "position": {
-        "x": 1440,
-        "y": 760
-      },
-      "selected": false,
-      "positionAbsolute": {
-        "x": 1440,
         "y": 760
       }
     },
@@ -11777,12 +11625,12 @@
       "height": 94,
       "dragging": false,
       "position": {
-        "x": 1720,
+        "x": 1440,
         "y": 760
       },
       "selected": false,
       "positionAbsolute": {
-        "x": 1720,
+        "x": 1440,
         "y": 760
       }
     },
@@ -11792,7 +11640,7 @@
         "label": "Clear Pending Action",
         "inputs": {
           "credentialId": "",
-          "query": "WITH del AS (\n  DELETE FROM \"ChatbotPendingAction\" WHERE \"sessionId\" = $1 RETURNING 1\n)\nSELECT 'Cancelled.' AS reply;",
+          "query": "SELECT sql_chat_cancel($1) AS reply",
           "queryParameters": [
             "{{ $('Normalize Input').item.json.sessionId }}"
           ],
@@ -11873,7 +11721,7 @@
       },
       "type": "action",
       "width": 240,
-      "height": 110,
+      "height": 100,
       "dragging": false,
       "position": {
         "x": 1140,
@@ -11882,158 +11730,6 @@
       "selected": false,
       "positionAbsolute": {
         "x": 1140,
-        "y": 900
-      }
-    },
-    {
-      "id": "set-cancel",
-      "data": {
-        "label": "Shape Reply (Cancel)",
-        "inputs": {
-          "mode": "manual",
-          "assignments": [
-            {
-              "name": "reply",
-              "value": "{{ $json.reply }}",
-              "valueType": "expression",
-              "type": "string"
-            }
-          ],
-          "includeBinaryData": false,
-          "supportDotNotation": true,
-          "inputFieldsToInclude": "selected",
-          "fieldsToInclude": [],
-          "includeOtherInputFields": false,
-          "ignoreTypeConversionErrors": false
-        },
-        "toolId": "core.set",
-        "toolData": {
-          "id": "core.set",
-          "displayName": "Set Fields",
-          "category": "Core  Utilities",
-          "provider": "core",
-          "operation": "set",
-          "description": "Set or update fields",
-          "inputSchemaJSON": {
-            "type": "object",
-            "properties": {
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "manual",
-                  "json"
-                ],
-                "default": "manual",
-                "description": "Select Manual Mapping or JSON Output"
-              },
-              "assignments": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string",
-                      "description": "Field name"
-                    },
-                    "value": {
-                      "description": "Field value (Fixed or Expression)"
-                    },
-                    "valueType": {
-                      "type": "string",
-                      "enum": [
-                        "fixed",
-                        "expression"
-                      ],
-                      "default": "expression",
-                      "description": "Whether field value is fixed or an expression"
-                    },
-                    "type": {
-                      "type": "string",
-                      "description": "Data type of the field"
-                    }
-                  },
-                  "required": [
-                    "name"
-                  ],
-                  "additionalProperties": false
-                },
-                "description": "Fields to set when using Manual Mapping"
-              },
-              "jsonValue": {
-                "type": "string",
-                "description": "JSON to merge into the output when using JSON Output mode"
-              },
-              "includeOtherInputFields": {
-                "type": "boolean",
-                "default": false,
-                "description": "Also include unchanged fields from the input"
-              },
-              "inputFieldsToInclude": {
-                "type": "string",
-                "enum": [
-                  "all",
-                  "selected",
-                  "allExcept"
-                ],
-                "default": "all",
-                "description": "Choose which input data to include in the output data"
-              },
-              "fieldsToInclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to include when Input Fields to Include is Selected"
-              },
-              "fieldsToExclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to exclude when Input Fields to Include is All Except"
-              },
-              "includeBinaryData": {
-                "type": "boolean",
-                "default": true,
-                "description": "Include binary data in the output"
-              },
-              "ignoreTypeConversionErrors": {
-                "type": "boolean",
-                "default": false,
-                "description": "Ignore some data type errors when mapping fields (Manual Mapping only)"
-              },
-              "supportDotNotation": {
-                "type": "boolean",
-                "default": true,
-                "description": "If enabled, dotted names create nested objects (e.g. number.one \u2192 { number: { one: value } })"
-              },
-              "items": {
-                "type": "array",
-                "description": "Array of items to process (for multi-item execution)"
-              },
-              "$inputItem": {
-                "description": "Single item to process (for backward compatibility)"
-              }
-            },
-            "additionalProperties": true,
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          }
-        },
-        "isTrigger": false,
-        "connectedHandles": [],
-        "isPrimaryTrigger": false
-      },
-      "type": "action",
-      "width": 240,
-      "height": 94,
-      "dragging": false,
-      "position": {
-        "x": 1440,
-        "y": 900
-      },
-      "selected": false,
-      "positionAbsolute": {
-        "x": 1440,
         "y": 900
       }
     },
@@ -12150,12 +11846,12 @@
       "height": 94,
       "dragging": false,
       "position": {
-        "x": 1720,
+        "x": 1440,
         "y": 900
       },
       "selected": false,
       "positionAbsolute": {
-        "x": 1720,
+        "x": 1440,
         "y": 900
       }
     },
@@ -12280,7 +11976,7 @@
       },
       "type": "switch",
       "width": 240,
-      "height": 110,
+      "height": 100,
       "dragging": false,
       "position": {
         "x": 1140,
@@ -12298,11 +11994,11 @@
         "label": "Preview Restock",
         "inputs": {
           "credentialId": "",
-          "query": "WITH r AS (SELECT sql_restock($1, $2::bigint, true) AS j),\nins AS (\n  INSERT INTO \"ChatbotPendingAction\"(\"sessionId\", action, params, summary, \"createdAt\")\n  SELECT $3, 'restock', jsonb_build_object('drug', $1::text, 'qty', $2::bigint), r.j->>'summary', now()\n  FROM r WHERE (r.j->>'ok') = 'true'\n  ON CONFLICT (\"sessionId\") DO UPDATE\n    SET action = EXCLUDED.action, params = EXCLUDED.params,\n        summary = EXCLUDED.summary, \"createdAt\" = now()\n)\nSELECT CASE WHEN (r.j->>'ok') = 'true'\n            THEN (r.j->>'summary') || '. Confirm? (yes/no)'\n            ELSE (r.j->>'error') END AS reply\nFROM r;",
+          "query": "SELECT sql_chat_preview_restock($1, $2, $3) AS reply",
           "queryParameters": [
+            "{{ $('Normalize Input').item.json.sessionId }}",
             "{{ $json.drug }}",
-            "{{ $json.qty }}",
-            "{{ $('Normalize Input').item.json.sessionId }}"
+            "{{ $json.qty }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -12381,7 +12077,7 @@
       },
       "type": "action",
       "width": 240,
-      "height": 110,
+      "height": 100,
       "dragging": false,
       "position": {
         "x": 1440,
@@ -12390,158 +12086,6 @@
       "selected": false,
       "positionAbsolute": {
         "x": 1440,
-        "y": 1040
-      }
-    },
-    {
-      "id": "set-restock",
-      "data": {
-        "label": "Shape Reply (Restock)",
-        "inputs": {
-          "mode": "manual",
-          "assignments": [
-            {
-              "name": "reply",
-              "value": "{{ $json.reply }}",
-              "valueType": "expression",
-              "type": "string"
-            }
-          ],
-          "includeBinaryData": false,
-          "supportDotNotation": true,
-          "inputFieldsToInclude": "selected",
-          "fieldsToInclude": [],
-          "includeOtherInputFields": false,
-          "ignoreTypeConversionErrors": false
-        },
-        "toolId": "core.set",
-        "toolData": {
-          "id": "core.set",
-          "displayName": "Set Fields",
-          "category": "Core  Utilities",
-          "provider": "core",
-          "operation": "set",
-          "description": "Set or update fields",
-          "inputSchemaJSON": {
-            "type": "object",
-            "properties": {
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "manual",
-                  "json"
-                ],
-                "default": "manual",
-                "description": "Select Manual Mapping or JSON Output"
-              },
-              "assignments": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string",
-                      "description": "Field name"
-                    },
-                    "value": {
-                      "description": "Field value (Fixed or Expression)"
-                    },
-                    "valueType": {
-                      "type": "string",
-                      "enum": [
-                        "fixed",
-                        "expression"
-                      ],
-                      "default": "expression",
-                      "description": "Whether field value is fixed or an expression"
-                    },
-                    "type": {
-                      "type": "string",
-                      "description": "Data type of the field"
-                    }
-                  },
-                  "required": [
-                    "name"
-                  ],
-                  "additionalProperties": false
-                },
-                "description": "Fields to set when using Manual Mapping"
-              },
-              "jsonValue": {
-                "type": "string",
-                "description": "JSON to merge into the output when using JSON Output mode"
-              },
-              "includeOtherInputFields": {
-                "type": "boolean",
-                "default": false,
-                "description": "Also include unchanged fields from the input"
-              },
-              "inputFieldsToInclude": {
-                "type": "string",
-                "enum": [
-                  "all",
-                  "selected",
-                  "allExcept"
-                ],
-                "default": "all",
-                "description": "Choose which input data to include in the output data"
-              },
-              "fieldsToInclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to include when Input Fields to Include is Selected"
-              },
-              "fieldsToExclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to exclude when Input Fields to Include is All Except"
-              },
-              "includeBinaryData": {
-                "type": "boolean",
-                "default": true,
-                "description": "Include binary data in the output"
-              },
-              "ignoreTypeConversionErrors": {
-                "type": "boolean",
-                "default": false,
-                "description": "Ignore some data type errors when mapping fields (Manual Mapping only)"
-              },
-              "supportDotNotation": {
-                "type": "boolean",
-                "default": true,
-                "description": "If enabled, dotted names create nested objects (e.g. number.one \u2192 { number: { one: value } })"
-              },
-              "items": {
-                "type": "array",
-                "description": "Array of items to process (for multi-item execution)"
-              },
-              "$inputItem": {
-                "description": "Single item to process (for backward compatibility)"
-              }
-            },
-            "additionalProperties": true,
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          }
-        },
-        "isTrigger": false,
-        "connectedHandles": [],
-        "isPrimaryTrigger": false
-      },
-      "type": "action",
-      "width": 240,
-      "height": 94,
-      "dragging": false,
-      "position": {
-        "x": 1720,
-        "y": 1040
-      },
-      "selected": false,
-      "positionAbsolute": {
-        "x": 1720,
         "y": 1040
       }
     },
@@ -12658,12 +12202,12 @@
       "height": 94,
       "dragging": false,
       "position": {
-        "x": 2000,
+        "x": 1720,
         "y": 1040
       },
       "selected": false,
       "positionAbsolute": {
-        "x": 2000,
+        "x": 1720,
         "y": 1040
       }
     },
@@ -12673,8 +12217,9 @@
         "label": "Preview Create Patient",
         "inputs": {
           "credentialId": "",
-          "query": "WITH r AS (SELECT sql_create_patient($1,$2,$3,$4,$5,$6,$7,$8,$9, true) AS j),\nins AS (\n  INSERT INTO \"ChatbotPendingAction\"(\"sessionId\", action, params, summary, \"createdAt\")\n  SELECT $10, 'create_patient', jsonb_build_object(\n    'name',$1,'dob',$2,'gender',$3,'phone',$4,'wardCode',$5,\n    'bed',$6,'admissionDate',$7,'diagnosis',$8,'allergies',$9), r.j->>'summary', now()\n  FROM r WHERE (r.j->>'ok') = 'true'\n  ON CONFLICT (\"sessionId\") DO UPDATE\n    SET action = EXCLUDED.action, params = EXCLUDED.params,\n        summary = EXCLUDED.summary, \"createdAt\" = now()\n)\nSELECT CASE WHEN (r.j->>'ok') = 'true'\n            THEN (r.j->>'summary') || '. Confirm? (yes/no)'\n            ELSE (r.j->>'error') END AS reply\nFROM r;",
+          "query": "SELECT sql_chat_preview_create($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) AS reply",
           "queryParameters": [
+            "{{ $('Normalize Input').item.json.sessionId }}",
             "{{ $json.name }}",
             "{{ $json.dob }}",
             "{{ $json.gender }}",
@@ -12683,8 +12228,7 @@
             "{{ $json.bed }}",
             "{{ $json.admissionDate }}",
             "{{ $json.diagnosis }}",
-            "{{ $json.allergies }}",
-            "{{ $('Normalize Input').item.json.sessionId }}"
+            "{{ $json.allergies }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -12763,7 +12307,7 @@
       },
       "type": "action",
       "width": 240,
-      "height": 110,
+      "height": 100,
       "dragging": false,
       "position": {
         "x": 1440,
@@ -12772,158 +12316,6 @@
       "selected": false,
       "positionAbsolute": {
         "x": 1440,
-        "y": 1180
-      }
-    },
-    {
-      "id": "set-create",
-      "data": {
-        "label": "Shape Reply (Create)",
-        "inputs": {
-          "mode": "manual",
-          "assignments": [
-            {
-              "name": "reply",
-              "value": "{{ $json.reply }}",
-              "valueType": "expression",
-              "type": "string"
-            }
-          ],
-          "includeBinaryData": false,
-          "supportDotNotation": true,
-          "inputFieldsToInclude": "selected",
-          "fieldsToInclude": [],
-          "includeOtherInputFields": false,
-          "ignoreTypeConversionErrors": false
-        },
-        "toolId": "core.set",
-        "toolData": {
-          "id": "core.set",
-          "displayName": "Set Fields",
-          "category": "Core  Utilities",
-          "provider": "core",
-          "operation": "set",
-          "description": "Set or update fields",
-          "inputSchemaJSON": {
-            "type": "object",
-            "properties": {
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "manual",
-                  "json"
-                ],
-                "default": "manual",
-                "description": "Select Manual Mapping or JSON Output"
-              },
-              "assignments": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string",
-                      "description": "Field name"
-                    },
-                    "value": {
-                      "description": "Field value (Fixed or Expression)"
-                    },
-                    "valueType": {
-                      "type": "string",
-                      "enum": [
-                        "fixed",
-                        "expression"
-                      ],
-                      "default": "expression",
-                      "description": "Whether field value is fixed or an expression"
-                    },
-                    "type": {
-                      "type": "string",
-                      "description": "Data type of the field"
-                    }
-                  },
-                  "required": [
-                    "name"
-                  ],
-                  "additionalProperties": false
-                },
-                "description": "Fields to set when using Manual Mapping"
-              },
-              "jsonValue": {
-                "type": "string",
-                "description": "JSON to merge into the output when using JSON Output mode"
-              },
-              "includeOtherInputFields": {
-                "type": "boolean",
-                "default": false,
-                "description": "Also include unchanged fields from the input"
-              },
-              "inputFieldsToInclude": {
-                "type": "string",
-                "enum": [
-                  "all",
-                  "selected",
-                  "allExcept"
-                ],
-                "default": "all",
-                "description": "Choose which input data to include in the output data"
-              },
-              "fieldsToInclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to include when Input Fields to Include is Selected"
-              },
-              "fieldsToExclude": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "List of input fields to exclude when Input Fields to Include is All Except"
-              },
-              "includeBinaryData": {
-                "type": "boolean",
-                "default": true,
-                "description": "Include binary data in the output"
-              },
-              "ignoreTypeConversionErrors": {
-                "type": "boolean",
-                "default": false,
-                "description": "Ignore some data type errors when mapping fields (Manual Mapping only)"
-              },
-              "supportDotNotation": {
-                "type": "boolean",
-                "default": true,
-                "description": "If enabled, dotted names create nested objects (e.g. number.one \u2192 { number: { one: value } })"
-              },
-              "items": {
-                "type": "array",
-                "description": "Array of items to process (for multi-item execution)"
-              },
-              "$inputItem": {
-                "description": "Single item to process (for backward compatibility)"
-              }
-            },
-            "additionalProperties": true,
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          }
-        },
-        "isTrigger": false,
-        "connectedHandles": [],
-        "isPrimaryTrigger": false
-      },
-      "type": "action",
-      "width": 240,
-      "height": 94,
-      "dragging": false,
-      "position": {
-        "x": 1720,
-        "y": 1180
-      },
-      "selected": false,
-      "positionAbsolute": {
-        "x": 1720,
         "y": 1180
       }
     },
@@ -13040,12 +12432,12 @@
       "height": 94,
       "dragging": false,
       "position": {
-        "x": 2000,
+        "x": 1720,
         "y": 1180
       },
       "selected": false,
       "positionAbsolute": {
-        "x": 2000,
+        "x": 1720,
         "y": 1180
       }
     },
@@ -13575,31 +12967,17 @@
       "sourceHandle": "output-fallback"
     },
     {
-      "id": "reactflow__edge-exec-confirm-set-confirm",
+      "id": "reactflow__edge-exec-confirm-resp-confirm",
       "data": {},
       "type": "custom",
       "source": "exec-confirm",
-      "target": "set-confirm"
-    },
-    {
-      "id": "reactflow__edge-set-confirm-resp-confirm",
-      "data": {},
-      "type": "custom",
-      "source": "set-confirm",
       "target": "resp-confirm"
     },
     {
-      "id": "reactflow__edge-exec-cancel-set-cancel",
+      "id": "reactflow__edge-exec-cancel-resp-cancel",
       "data": {},
       "type": "custom",
       "source": "exec-cancel",
-      "target": "set-cancel"
-    },
-    {
-      "id": "reactflow__edge-set-cancel-resp-cancel",
-      "data": {},
-      "type": "custom",
-      "source": "set-cancel",
       "target": "resp-cancel"
     },
     {
@@ -13627,31 +13005,17 @@
       "sourceHandle": "output-fallback"
     },
     {
-      "id": "reactflow__edge-exec-restock-set-restock",
+      "id": "reactflow__edge-exec-restock-resp-restock",
       "data": {},
       "type": "custom",
       "source": "exec-restock",
-      "target": "set-restock"
-    },
-    {
-      "id": "reactflow__edge-set-restock-resp-restock",
-      "data": {},
-      "type": "custom",
-      "source": "set-restock",
       "target": "resp-restock"
     },
     {
-      "id": "reactflow__edge-exec-create-set-create",
+      "id": "reactflow__edge-exec-create-resp-create",
       "data": {},
       "type": "custom",
       "source": "exec-create",
-      "target": "set-create"
-    },
-    {
-      "id": "reactflow__edge-set-create-resp-create",
-      "data": {},
-      "type": "custom",
-      "source": "set-create",
       "target": "resp-create"
     },
     {

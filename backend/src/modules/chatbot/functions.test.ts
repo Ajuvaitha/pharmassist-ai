@@ -116,4 +116,11 @@ describe('sql_create_patient', () => {
     expect(r.ok).toBe(false)
     expect(r.error).toMatch(/dateOfBirth/)
   })
+
+  it('rejects an invalid calendar date instead of throwing at commit', async () => {
+    const r = await call('sql_create_patient', 'Jane Doe', '2026-02-30', 'Female', '0700000000',
+                         'Ward 4A', 'B-12', '2026-08-08', 'Pneumonia', 'None', true)
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/Invalid date/i)
+  })
 })

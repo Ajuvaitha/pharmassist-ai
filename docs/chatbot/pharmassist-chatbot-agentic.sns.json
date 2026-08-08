@@ -1,7 +1,7 @@
 {
   "_platform": "agentbuilder",
   "_version": 1,
-  "_exportedAt": "2026-08-08T07:39:23.000Z",
+  "_exportedAt": "2026-08-08T11:39:09.000Z",
   "_fingerprint": "YWN0aW9uOmNvcmUuc2V0fGFjdGlvbjpjb3JlLnNldHxhY3Rpb246Y29yZS5zZXR8",
   "nodes": [
     {
@@ -11274,7 +11274,7 @@
       }
     },
     {
-      "id": "switch-route-kind",
+      "id": "core_switch-1786086668101",
       "data": {
         "label": "Route Kind",
         "inputs": {
@@ -11414,7 +11414,7 @@
       }
     },
     {
-      "id": "exec-confirm",
+      "id": "postgres.executeQuery-1786086668102",
       "data": {
         "label": "Commit Pending Action",
         "inputs": {
@@ -11513,7 +11513,7 @@
       }
     },
     {
-      "id": "resp-confirm",
+      "id": "respondToWebhook-1786086668103",
       "data": {
         "label": "Reply: Confirm",
         "inputs": {
@@ -11635,7 +11635,7 @@
       }
     },
     {
-      "id": "exec-cancel",
+      "id": "postgres.executeQuery-1786086668104",
       "data": {
         "label": "Clear Pending Action",
         "inputs": {
@@ -11734,7 +11734,7 @@
       }
     },
     {
-      "id": "resp-cancel",
+      "id": "respondToWebhook-1786086668105",
       "data": {
         "label": "Reply: Cancel",
         "inputs": {
@@ -11856,7 +11856,7 @@
       }
     },
     {
-      "id": "switch-action",
+      "id": "core_switch-1786086668106",
       "data": {
         "label": "Route Action",
         "inputs": {
@@ -11989,7 +11989,7 @@
       }
     },
     {
-      "id": "exec-restock",
+      "id": "postgres.executeQuery-1786086668107",
       "data": {
         "label": "Preview Restock",
         "inputs": {
@@ -12090,7 +12090,7 @@
       }
     },
     {
-      "id": "resp-restock",
+      "id": "respondToWebhook-1786086668108",
       "data": {
         "label": "Reply: Restock",
         "inputs": {
@@ -12212,7 +12212,7 @@
       }
     },
     {
-      "id": "exec-create",
+      "id": "postgres.executeQuery-1786086668109",
       "data": {
         "label": "Preview Create Patient",
         "inputs": {
@@ -12320,7 +12320,7 @@
       }
     },
     {
-      "id": "resp-create",
+      "id": "respondToWebhook-1786086668110",
       "data": {
         "label": "Reply: Create Patient",
         "inputs": {
@@ -12442,7 +12442,7 @@
       }
     },
     {
-      "id": "set-actgeneral",
+      "id": "core.set-1786086668111",
       "data": {
         "label": "Shape Reply (Action Help)",
         "inputs": {
@@ -12594,7 +12594,7 @@
       }
     },
     {
-      "id": "resp-actgeneral",
+      "id": "respondToWebhook-1786086668112",
       "data": {
         "label": "Reply: Action Help",
         "inputs": {
@@ -12928,102 +12928,102 @@
       "target": "respondToWebhook-1786086668025"
     },
     {
-      "id": "reactflow__edge-informationExtractor-1786086667997-switch-route-kind",
+      "id": "reactflow__edge-informationExtractor-1786086667997-core_switch-1786086668101",
       "data": {},
       "type": "custom",
       "source": "informationExtractor-1786086667997",
-      "target": "switch-route-kind"
+      "target": "core_switch-1786086668101"
     },
     {
-      "id": "reactflow__edge-switch-route-kindoutput-0-exec-confirm",
+      "id": "reactflow__edge-core_switch-1786086668101output-0-postgres.executeQuery-1786086668102",
       "data": {},
       "type": "custom",
-      "source": "switch-route-kind",
-      "target": "exec-confirm",
+      "source": "core_switch-1786086668101",
+      "target": "postgres.executeQuery-1786086668102",
       "sourceHandle": "output-0"
     },
     {
-      "id": "reactflow__edge-switch-route-kindoutput-1-exec-cancel",
+      "id": "reactflow__edge-core_switch-1786086668101output-1-postgres.executeQuery-1786086668104",
       "data": {},
       "type": "custom",
-      "source": "switch-route-kind",
-      "target": "exec-cancel",
+      "source": "core_switch-1786086668101",
+      "target": "postgres.executeQuery-1786086668104",
       "sourceHandle": "output-1"
     },
     {
-      "id": "reactflow__edge-switch-route-kindoutput-2-switch-action",
+      "id": "reactflow__edge-core_switch-1786086668101output-2-core_switch-1786086668106",
       "data": {},
       "type": "custom",
-      "source": "switch-route-kind",
-      "target": "switch-action",
+      "source": "core_switch-1786086668101",
+      "target": "core_switch-1786086668106",
       "sourceHandle": "output-2"
     },
     {
-      "id": "reactflow__edge-switch-route-kindoutput-fallback-core_switch-1786086667998",
+      "id": "reactflow__edge-core_switch-1786086668101output-fallback-core_switch-1786086667998",
       "data": {},
       "type": "custom",
-      "source": "switch-route-kind",
+      "source": "core_switch-1786086668101",
       "target": "core_switch-1786086667998",
       "sourceHandle": "output-fallback"
     },
     {
-      "id": "reactflow__edge-exec-confirm-resp-confirm",
+      "id": "reactflow__edge-postgres.executeQuery-1786086668102-respondToWebhook-1786086668103",
       "data": {},
       "type": "custom",
-      "source": "exec-confirm",
-      "target": "resp-confirm"
+      "source": "postgres.executeQuery-1786086668102",
+      "target": "respondToWebhook-1786086668103"
     },
     {
-      "id": "reactflow__edge-exec-cancel-resp-cancel",
+      "id": "reactflow__edge-postgres.executeQuery-1786086668104-respondToWebhook-1786086668105",
       "data": {},
       "type": "custom",
-      "source": "exec-cancel",
-      "target": "resp-cancel"
+      "source": "postgres.executeQuery-1786086668104",
+      "target": "respondToWebhook-1786086668105"
     },
     {
-      "id": "reactflow__edge-switch-actionoutput-0-exec-restock",
+      "id": "reactflow__edge-core_switch-1786086668106output-0-postgres.executeQuery-1786086668107",
       "data": {},
       "type": "custom",
-      "source": "switch-action",
-      "target": "exec-restock",
+      "source": "core_switch-1786086668106",
+      "target": "postgres.executeQuery-1786086668107",
       "sourceHandle": "output-0"
     },
     {
-      "id": "reactflow__edge-switch-actionoutput-1-exec-create",
+      "id": "reactflow__edge-core_switch-1786086668106output-1-postgres.executeQuery-1786086668109",
       "data": {},
       "type": "custom",
-      "source": "switch-action",
-      "target": "exec-create",
+      "source": "core_switch-1786086668106",
+      "target": "postgres.executeQuery-1786086668109",
       "sourceHandle": "output-1"
     },
     {
-      "id": "reactflow__edge-switch-actionoutput-fallback-set-actgeneral",
+      "id": "reactflow__edge-core_switch-1786086668106output-fallback-core.set-1786086668111",
       "data": {},
       "type": "custom",
-      "source": "switch-action",
-      "target": "set-actgeneral",
+      "source": "core_switch-1786086668106",
+      "target": "core.set-1786086668111",
       "sourceHandle": "output-fallback"
     },
     {
-      "id": "reactflow__edge-exec-restock-resp-restock",
+      "id": "reactflow__edge-postgres.executeQuery-1786086668107-respondToWebhook-1786086668108",
       "data": {},
       "type": "custom",
-      "source": "exec-restock",
-      "target": "resp-restock"
+      "source": "postgres.executeQuery-1786086668107",
+      "target": "respondToWebhook-1786086668108"
     },
     {
-      "id": "reactflow__edge-exec-create-resp-create",
+      "id": "reactflow__edge-postgres.executeQuery-1786086668109-respondToWebhook-1786086668110",
       "data": {},
       "type": "custom",
-      "source": "exec-create",
-      "target": "resp-create"
+      "source": "postgres.executeQuery-1786086668109",
+      "target": "respondToWebhook-1786086668110"
     },
     {
-      "id": "reactflow__edge-set-actgeneral-resp-actgeneral",
+      "id": "reactflow__edge-core.set-1786086668111-respondToWebhook-1786086668112",
       "data": {},
       "type": "custom",
-      "source": "set-actgeneral",
-      "target": "resp-actgeneral"
+      "source": "core.set-1786086668111",
+      "target": "respondToWebhook-1786086668112"
     }
   ]
 }

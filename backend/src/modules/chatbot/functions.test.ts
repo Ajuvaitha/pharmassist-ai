@@ -109,4 +109,11 @@ describe('sql_create_patient', () => {
     const ev = await prisma.activityEvent.findFirst({ where: { type: 'register', patientId: p.id } })
     expect(ev?.text).toMatch(/via assistant/)
   })
+
+  it('rejects a blank date of birth instead of throwing at commit', async () => {
+    const r = await call('sql_create_patient', 'Jane Doe', '', 'Female', '0700000000',
+                         'Ward 4A', 'B-12', '2026-08-08', 'Pneumonia', 'None', true)
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/dateOfBirth/)
+  })
 })

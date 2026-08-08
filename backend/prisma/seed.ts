@@ -69,6 +69,18 @@ export async function seed(prisma: PrismaClient): Promise<void> {
     })
   }
 
+  await prisma.user.upsert({
+    where: { username: 'chatbot' },
+    update: { displayName: 'PharmAssist Assistant', role: 'pharmacist', wardId: null },
+    create: {
+      username: 'chatbot',
+      passwordHash: 'x', // never authenticates; actor attribution only
+      displayName: 'PharmAssist Assistant',
+      role: 'pharmacist',
+      wardId: null,
+    },
+  })
+
   for (const patient of PATIENTS) {
     const ward = await prisma.ward.findUniqueOrThrow({ where: { code: patient.wardCode } })
 

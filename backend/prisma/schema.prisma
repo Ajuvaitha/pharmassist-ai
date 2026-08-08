@@ -325,3 +325,11 @@ model ActivityEvent {
   // to the one above, so both are kept.
   @@index([type, occurredAt])
 }
+
+model ChatbotPendingAction {
+  sessionId String   @id
+  action    String
+  params    Json
+  summary   String
+  createdAt DateTime @default(now())
+}

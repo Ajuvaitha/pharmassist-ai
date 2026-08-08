@@ -26,7 +26,7 @@ export function getTestPrisma(): PrismaClient {
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
-      "ActivityEvent", "BillingLine", "IndentLine", "DailyIndent",
+      "ChatbotPendingAction", "ActivityEvent", "BillingLine", "IndentLine", "DailyIndent",
       "StockMovement", "Prescription", "InventoryItem", "Drug",
       "Patient", "User", "Ward"
     RESTART IDENTITY CASCADE

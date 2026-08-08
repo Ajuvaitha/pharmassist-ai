@@ -1,7 +1,7 @@
 {
   "_platform": "agentbuilder",
   "_version": 1,
-  "_exportedAt": "2026-08-08T07:01:58.000Z",
+  "_exportedAt": "2026-08-08T07:16:30.000Z",
   "_fingerprint": "YWN0aW9uOmNvcmUuc2V0fGFjdGlvbjpjb3JlLnNldHxhY3Rpb246Y29yZS5zZXR8",
   "nodes": [
     {
@@ -11421,7 +11421,7 @@
           "credentialId": "",
           "query": "WITH p AS (\n  SELECT action, params FROM \"ChatbotPendingAction\"\n  WHERE \"sessionId\" = $1 AND \"createdAt\" > now() - interval '5 minutes'\n),\nres AS (\n  SELECT CASE p.action\n    WHEN 'restock' THEN sql_restock(p.params->>'drug', (p.params->>'qty')::bigint, false)\n    WHEN 'create_patient' THEN sql_create_patient(\n      p.params->>'name', p.params->>'dob', p.params->>'gender', p.params->>'phone',\n      p.params->>'wardCode', p.params->>'bed', p.params->>'admissionDate',\n      p.params->>'diagnosis', p.params->>'allergies', false)\n  END AS j\n  FROM p\n),\ndel AS (\n  DELETE FROM \"ChatbotPendingAction\" WHERE \"sessionId\" = $1\n)\nSELECT COALESCE((SELECT j->>'summary' FROM res), (SELECT j->>'error' FROM res), 'Nothing to confirm \u2014 that request may have expired.') AS reply;",
           "queryParameters": [
-            "{{ $json.sessionId }}"
+            "{{ $('Normalize Input').item.json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -11794,7 +11794,7 @@
           "credentialId": "",
           "query": "WITH del AS (\n  DELETE FROM \"ChatbotPendingAction\" WHERE \"sessionId\" = $1 RETURNING 1\n)\nSELECT 'Cancelled.' AS reply;",
           "queryParameters": [
-            "{{ $json.sessionId }}"
+            "{{ $('Normalize Input').item.json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -12302,7 +12302,7 @@
           "queryParameters": [
             "{{ $json.drug }}",
             "{{ $json.qty }}",
-            "{{ $json.sessionId }}"
+            "{{ $('Normalize Input').item.json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -12684,7 +12684,7 @@
             "{{ $json.admissionDate }}",
             "{{ $json.diagnosis }}",
             "{{ $json.allergies }}",
-            "{{ $json.sessionId }}"
+            "{{ $('Normalize Input').item.json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,

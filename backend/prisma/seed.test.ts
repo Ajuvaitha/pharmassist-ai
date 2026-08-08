@@ -15,7 +15,7 @@ describe('seed', () => {
     expect(await prisma.ward.count()).toBe(4)
     expect(await prisma.drug.count()).toBe(15)
     expect(await prisma.inventoryItem.count()).toBe(15)
-    expect(await prisma.user.count()).toBe(7)
+    expect(await prisma.user.count()).toBe(8)
     expect(await prisma.patient.count()).toBe(5)
     expect(await prisma.prescription.count()).toBe(15)
   })

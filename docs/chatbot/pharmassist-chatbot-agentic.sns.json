@@ -1,7 +1,7 @@
 {
   "_platform": "agentbuilder",
   "_version": 1,
-  "_exportedAt": "2026-08-08T06:01:05.000Z",
+  "_exportedAt": "2026-08-08T07:01:58.000Z",
   "_fingerprint": "YWN0aW9uOmNvcmUuc2V0fGFjdGlvbjpjb3JlLnNldHxhY3Rpb246Y29yZS5zZXR8",
   "nodes": [
     {
@@ -754,7 +754,7 @@
       "data": {
         "label": "Extract Intent",
         "inputs": {
-          "text": "User message: {{ $('Normalize Input').item.json.userMessage }}\nIf a pending action is shown next, a bare yes/ok/sure means confirm and no/cancel/stop means cancel.\nPending action awaiting confirmation (may be empty): {{ $('Load Pending').item.json.summary }}",
+          "text": "{{ $json.userMessage }}",
           "schemaType": "attribute_descriptions",
           "provider": "gemini",
           "model": "gemini-3.5-flash-lite",
@@ -11274,105 +11274,6 @@
       }
     },
     {
-      "id": "exec-load-pending",
-      "data": {
-        "label": "Load Pending",
-        "inputs": {
-          "credentialId": "",
-          "query": "SELECT action, params, summary\nFROM \"ChatbotPendingAction\"\nWHERE \"sessionId\" = $1\n  AND \"createdAt\" > now() - interval '5 minutes';",
-          "queryParameters": [
-            "{{ $('Normalize Input').item.json.sessionId }}"
-          ],
-          "queryBatching": "single",
-          "idleTimeout": 0,
-          "replaceEmptyStringsWithNull": false,
-          "outputLargeNumbersAsText": false
-        },
-        "toolId": "postgres.executeQuery",
-        "toolData": {
-          "id": "postgres.executeQuery",
-          "displayName": "Execute Query",
-          "category": "Memory & State",
-          "provider": "postgres",
-          "operation": "executeQuery",
-          "icon": "Database",
-          "description": "Execute a raw SQL query",
-          "inputSchemaJSON": {
-            "type": "object",
-            "properties": {
-              "credentialId": {
-                "type": "string",
-                "minLength": 1
-              },
-              "queryTimeout": {
-                "type": "integer",
-                "exclusiveMinimum": 0,
-                "description": "Connection timeout in seconds"
-              },
-              "idleTimeout": {
-                "type": "integer",
-                "minimum": 0,
-                "default": 0,
-                "description": "Delay closing idle connection in seconds"
-              },
-              "replaceEmptyStringsWithNull": {
-                "type": "boolean",
-                "default": false,
-                "description": "Replace empty string values with NULL"
-              },
-              "outputLargeNumbersAsText": {
-                "type": "boolean",
-                "default": false,
-                "description": "Output BIGINT/NUMERIC as text"
-              },
-              "queryBatching": {
-                "type": "string",
-                "enum": [
-                  "single",
-                  "independently",
-                  "transaction"
-                ],
-                "default": "single",
-                "description": "Query Batching"
-              },
-              "query": {
-                "type": "string",
-                "description": "SQL query to execute"
-              },
-              "queryParameters": {
-                "type": "array",
-                "default": [],
-                "description": "Parameters for prepared statements"
-              }
-            },
-            "required": [
-              "credentialId",
-              "query"
-            ],
-            "additionalProperties": false,
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "executionMode": "batch"
-        },
-        "isTrigger": false,
-        "connectedHandles": [],
-        "isPrimaryTrigger": false
-      },
-      "type": "action",
-      "width": 240,
-      "height": 110,
-      "dragging": false,
-      "position": {
-        "x": 360,
-        "y": 900
-      },
-      "selected": false,
-      "positionAbsolute": {
-        "x": 360,
-        "y": 900
-      }
-    },
-    {
       "id": "switch-route-kind",
       "data": {
         "label": "Route Kind",
@@ -11520,7 +11421,7 @@
           "credentialId": "",
           "query": "WITH p AS (\n  SELECT action, params FROM \"ChatbotPendingAction\"\n  WHERE \"sessionId\" = $1 AND \"createdAt\" > now() - interval '5 minutes'\n),\nres AS (\n  SELECT CASE p.action\n    WHEN 'restock' THEN sql_restock(p.params->>'drug', (p.params->>'qty')::bigint, false)\n    WHEN 'create_patient' THEN sql_create_patient(\n      p.params->>'name', p.params->>'dob', p.params->>'gender', p.params->>'phone',\n      p.params->>'wardCode', p.params->>'bed', p.params->>'admissionDate',\n      p.params->>'diagnosis', p.params->>'allergies', false)\n  END AS j\n  FROM p\n),\ndel AS (\n  DELETE FROM \"ChatbotPendingAction\" WHERE \"sessionId\" = $1\n)\nSELECT COALESCE((SELECT j->>'summary' FROM res), (SELECT j->>'error' FROM res), 'Nothing to confirm \u2014 that request may have expired.') AS reply;",
           "queryParameters": [
-            "{{ $('Normalize Input').item.json.sessionId }}"
+            "{{ $json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -11893,7 +11794,7 @@
           "credentialId": "",
           "query": "WITH del AS (\n  DELETE FROM \"ChatbotPendingAction\" WHERE \"sessionId\" = $1 RETURNING 1\n)\nSELECT 'Cancelled.' AS reply;",
           "queryParameters": [
-            "{{ $('Normalize Input').item.json.sessionId }}"
+            "{{ $json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -12401,7 +12302,7 @@
           "queryParameters": [
             "{{ $json.drug }}",
             "{{ $json.qty }}",
-            "{{ $('Normalize Input').item.json.sessionId }}"
+            "{{ $json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -12783,7 +12684,7 @@
             "{{ $json.admissionDate }}",
             "{{ $json.diagnosis }}",
             "{{ $json.allergies }}",
-            "{{ $('Normalize Input').item.json.sessionId }}"
+            "{{ $json.sessionId }}"
           ],
           "queryBatching": "single",
           "idleTimeout": 0,
@@ -13432,6 +13333,13 @@
       "target": "core.set-1786086667996"
     },
     {
+      "id": "reactflow__edge-core.set-1786086667996-informationExtractor-1786086667997",
+      "data": {},
+      "type": "custom",
+      "source": "core.set-1786086667996",
+      "target": "informationExtractor-1786086667997"
+    },
+    {
       "id": "reactflow__edge-core_switch-1786086667998output-0-postgres.executeQuery-1786086667999",
       "data": {},
       "type": "custom",
@@ -13626,20 +13534,6 @@
       "type": "custom",
       "source": "core.set-1786086668024",
       "target": "respondToWebhook-1786086668025"
-    },
-    {
-      "id": "reactflow__edge-core.set-1786086667996-exec-load-pending",
-      "data": {},
-      "type": "custom",
-      "source": "core.set-1786086667996",
-      "target": "exec-load-pending"
-    },
-    {
-      "id": "reactflow__edge-exec-load-pending-informationExtractor-1786086667997",
-      "data": {},
-      "type": "custom",
-      "source": "exec-load-pending",
-      "target": "informationExtractor-1786086667997"
     },
     {
       "id": "reactflow__edge-informationExtractor-1786086667997-switch-route-kind",

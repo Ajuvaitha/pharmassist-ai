@@ -36,6 +36,7 @@ export default function PrescriptionForm({ initial, lockedDrug, onSave, onCancel
   const [durationDays, setDurationDays] = useState(initial?.durationDays?.toString() ?? '7');
   const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [validationError, setValidationError] = useState('');
 
   const toggleTime = (t: TimeOfDay) => {
     setTimeOfDay(prev =>
@@ -45,7 +46,15 @@ export default function PrescriptionForm({ initial, lockedDrug, onSave, onCancel
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!drugId || !dose.trim()) return;
+    if (!drugId) {
+      setValidationError('Please select a drug.');
+      return;
+    }
+    if (!dose.trim()) {
+      setValidationError('Please enter a dose for this prescription.');
+      return;
+    }
+    setValidationError('');
     onSave({
       drugId,
       dose: dose.trim(),
@@ -61,6 +70,11 @@ export default function PrescriptionForm({ initial, lockedDrug, onSave, onCancel
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {validationError && (
+        <div style={{ padding: '8px 12px', borderRadius: 6, background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>
+          {validationError}
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 12 }}>
         {lockedDrug ? (
           <div>
@@ -72,7 +86,20 @@ export default function PrescriptionForm({ initial, lockedDrug, onSave, onCancel
         ) : (
           <div>
             <label style={lbl}>Drug</label>
-            <select required value={drugId} onChange={e => setDrugId(e.target.value)} style={inp}>
+            <select
+              required
+              value={drugId}
+              onChange={e => {
+                const id = e.target.value;
+                setDrugId(id);
+                setValidationError('');
+                const selected = (drugs ?? []).find(d => d.id === id);
+                if (selected?.strength && !dose) {
+                  setDose(selected.strength);
+                }
+              }}
+              style={inp}
+            >
               <option value="">Select a drug…</option>
               {(drugs ?? []).map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
             </select>

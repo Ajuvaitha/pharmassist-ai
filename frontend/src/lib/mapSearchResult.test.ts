@@ -9,4 +9,12 @@ describe('searchResultToInitialRx', () => {
     })
     expect(initial).toEqual({ drugId: 'drug-1', dose: '500mg' })
   })
+
+  it('falls back to 1 tablet when strength is empty', () => {
+    const initial = searchResultToInitialRx({
+      id: 'drug-2', label: 'Custom Drug', name: 'Custom',
+      strength: '', form: 'Tablet', matchType: 'prefix', score: 1,
+    })
+    expect(initial).toEqual({ drugId: 'drug-2', dose: '1 tablet' })
+  })
 })

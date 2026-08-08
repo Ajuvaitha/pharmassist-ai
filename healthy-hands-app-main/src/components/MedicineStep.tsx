@@ -108,7 +108,10 @@ function SuggestionRow({
 }) {
   const m = match.medicine;
   return (
-    <div className="rounded-2xl border border-border bg-card p-3.5 transition-colors hover:border-primary/40">
+    <div
+      onClick={() => onSelect(m, m.strength[0] ?? "")}
+      className="cursor-pointer rounded-2xl border border-border bg-card p-3.5 transition-colors hover:border-primary/40"
+    >
       <div className="flex items-center gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
           <Pill className="h-5 w-5" />
@@ -138,7 +141,10 @@ function SuggestionRow({
         {m.strength.map((s) => (
           <button
             key={s}
-            onClick={() => onSelect(m, s)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(m, s);
+            }}
             className="tap-target rounded-full border border-border bg-secondary px-4 text-sm font-bold text-secondary-foreground transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground"
           >
             {s}

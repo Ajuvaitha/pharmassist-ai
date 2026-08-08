@@ -33,6 +33,7 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
   const [durationDays, setDurationDays] = useState(initial?.durationDays?.toString() ?? '7');
   const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [validationError, setValidationError] = useState('');
 
   const toggleTime = (t: TimeOfDay) => {
     setTimeOfDay(prev =>
@@ -42,7 +43,15 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!drug.trim() || !dose.trim()) return;
+    if (!drug.trim()) {
+      setValidationError('Please enter a drug name.');
+      return;
+    }
+    if (!dose.trim()) {
+      setValidationError('Please enter a dose.');
+      return;
+    }
+    setValidationError('');
     onSave({
       drug: drug.trim(),
       dose: dose.trim(),
@@ -60,6 +69,11 @@ export default function PrescriptionForm({ initial, prescribedBy, onSave, onCanc
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {validationError && (
+        <div style={{ padding: '8px 12px', borderRadius: 6, background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>
+          {validationError}
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 12 }}>
         <div>
           <label style={lbl}>Drug Name</label>

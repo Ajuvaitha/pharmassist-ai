@@ -98,12 +98,15 @@ export default function PrescriptionWriterPage() {
         />
       )}
 
+      {createRx.error && <ErrorPanel error={createRx.error} />}
+
       {/* Popup 2: prescription details */}
       {confirmed && (
         <div style={overlay}>
           <div style={{ background: '#fff', borderRadius: 10, padding: 20, width: 'min(560px, 94vw)', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>Prescription details</h3>
             <PrescriptionForm
+              key={confirmed.id}
               prescribedBy={me?.displayName ?? ''}
               lockedDrug={{ id: confirmed.id, label: confirmed.label }}
               initial={searchResultToInitialRx(confirmed)}

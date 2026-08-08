@@ -189,6 +189,8 @@ export default function DoctorPatientsPage({ doctorName }: DoctorPatientsPagePro
               <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: '0 0 16px' }}>
                 {mode === 'edit' ? `Edit — ${editingRx?.drug}` : 'New Prescription'}
               </h3>
+              {createRx.error && <ErrorPanel error={createRx.error} />}
+              {updateRx.error && <ErrorPanel error={updateRx.error} />}
               <PrescriptionForm
                 initial={mode === 'edit' ? editingRx ?? undefined : undefined}
                 prescribedBy={doctorName}

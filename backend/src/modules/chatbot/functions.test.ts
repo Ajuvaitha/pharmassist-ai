@@ -71,3 +71,42 @@ describe('sql_restock', () => {
     expect(mv?.actorId).toBe(chatbot.id)
   })
 })
+
+describe('sql_create_patient', () => {
+  const ok = ['Jane Doe', '1990-05-01', 'Female', '0700000000', 'Ward 4A',
+              'B-12', '2026-08-08', 'Pneumonia', 'None'] as const
+
+  it('reports missing required fields', async () => {
+    const r = await call('sql_create_patient', null, null, 'Female', '070', 'Ward 4A',
+                         'B-1', '2026-08-08', 'Dx', 'None', true)
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/name/)
+    expect(r.error).toMatch(/dateOfBirth/)
+  })
+
+  it('errors on an unknown ward code', async () => {
+    const r = await call('sql_create_patient', 'Jane Doe', '1990-05-01', 'Female', '070',
+                         'Ward ZZ', 'B-1', '2026-08-08', 'Dx', 'None', true)
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/ward/i)
+  })
+
+  it('preview resolves without creating a patient', async () => {
+    const before = await prisma.patient.count()
+    const r = await call('sql_create_patient', ...ok, true)
+    expect(r.ok).toBe(true)
+    expect(await prisma.patient.count()).toBe(before)
+  })
+
+  it('commit creates the patient with an MRN and register activity', async () => {
+    const before = await prisma.patient.count()
+    const r = await call('sql_create_patient', ...ok, false)
+    expect(r.ok).toBe(true)
+    expect(r.summary).toMatch(/MRN-\d{6}/)
+    expect(await prisma.patient.count()).toBe(before + 1)
+    const p = await prisma.patient.findFirstOrThrow({ where: { name: 'Jane Doe' } })
+    expect(p.gender).toBe('Female')
+    const ev = await prisma.activityEvent.findFirst({ where: { type: 'register', patientId: p.id } })
+    expect(ev?.text).toMatch(/via assistant/)
+  })
+})
